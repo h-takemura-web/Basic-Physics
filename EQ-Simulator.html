@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>地震波シミュレーター - 密度可変・弾性解析版</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 550px 1fr;
+            grid-template-rows: 310px 1fr; /* スライダー増加に合わせて高さを調整 */
+            gap: 12px;
+            width: 1200px;
+            max-width: 100vw;
+        }
+
+        .control-panel {
+            grid-column: 1;
+            grid-row: 1;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .panel-content {
+            display: flex;
+            gap: 15px;
+            align-items: stretch;
+        }
+
+        .settings-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .analysis-area {
+            width: 220px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 5px solid #e74c3c;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .graph-panel {
+            grid-column: 2;
+            grid-row: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .graph-title { font-size: 0.8rem; font-weight: bold; color: #333; margin-bottom: 5px; text-align: center; }
+
+        .canvas-panel {
+            grid-column: 1 / span 2;
+            grid-row: 2;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+            height: 440px;
+            position: relative;
+        }
+
+        .instruction {
+            position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.8);
+            padding: 5px 10px; border-radius: 5px; font-size: 0.7rem; pointer-events: none; color: #666;
+        }
+
+        h1 { font-size: 0.9rem; margin: 0 0 8px 0; color: #2c3e50; border-bottom: 2px solid #3498db; }
+        .slider-label { font-size: 0.7rem; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 1px; }
+        .damp-desc { display: flex; justify-content: space-between; font-size: 0.65rem; color: #7f8c8d; margin-top: -2px; margin-bottom: 5px; }
+        input[type="range"] { width: 100%; cursor: pointer; height: 14px; }
+
+        .btn-group { display: flex; gap: 4px; margin-top: 5px; }
+        button {
+            flex: 1; padding: 6px 4px; font-size: 0.75rem; cursor: pointer; border: none; border-radius: 6px;
+            background-color: #3498db; color: white; font-weight: bold;
+        }
+        #pauseBtn { background-color: #f39c12; }
+        #resetBtn { background-color: #e74c3c; }
+
+        .data-row { display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 3px; }
+        .data-val { font-family: monospace; font-weight: bold; color: #f1c40f; }
+        .sub-header { font-size: 0.6rem; color: #bdc3c7; border-bottom: 1px solid #555; margin-bottom: 4px; padding-top: 4px; font-weight: bold; }
+        .k-val { color: #5dade2 !important; }
+
+        canvas { display: block; width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="main-layout">
+    <div class="control-panel">
+        <h1>地震波コントロール & 解析</h1>
+        <div class="panel-content">
+            <div class="settings-area">
+                <div class="slider-group">
+                    <div class="slider-label"><span>P波速度 ($V_p$)</span><span><span id="vPVal">6.0</span> km/s</span></div>
+                    <input type="range" id="vPSlider" min="1.1" max="10.0" step="0.1" value="6.0">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label"><span>S波速度 ($V_s$)</span><span><span id="vSVal">3.5</span> km/s</span></div>
+                    <input type="range" id="vSSlider" min="1.0" max="9.9" step="0.1" value="3.5">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label"><span>地盤密度 ($\rho$)</span><span><span id="rhoVal">2.70</span> g/cm³</span></div>
+                    <input type="range" id="rhoSlider" min="1.0" max="4.0" step="0.05" value="2.70">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label"><span>減衰係数（波の吸収率）</span><span><span id="dampVal">0.05</span></span></div>
+                    <input type="range" id="dampSlider" min="0.01" max="0.30" step="0.01" value="0.05">
+                    <div class="damp-desc"><span>◀ 硬い岩盤</span><span>やわらかい地盤 ▶</span></div>
+                </div>
+                <div class="btn-group">
+                    <button id="startBtn">地震発生</button>
+                    <button id="pauseBtn">一時停止</button>
+                    <button id="resetBtn">リセット</button>
+                </div>
+            </div>
+
+            <div class="analysis-area">
+                <div class="sub-header">大森公式</div>
+                <div class="data-row">大森係数 $k$: <span id="kVal" class="data-val k-val">---</span></div>
+                
+                <div class="sub-header">岩石物性 (GPa)</div>
+                <div class="data-row">剛性率 $\mu$: <span id="shearVal" class="data-val" style="color:#2ecc71">---</span></div>
+                <div class="data-row">体積弾性率 $K$: <span id="bulkVal" class="data-val" style="color:#2ecc71">---</span></div>
+                <div class="data-row">ヤング率 $E$: <span id="youngVal" class="data-val" style="color:#2ecc71">---</span></div>
+                <div class="data-row">ポアソン比 $\nu$: <span id="poiVal" class="data-val" style="color:#2ecc71">---</span></div>
+                
+                <div class="sub-header">観測データ</div>
+                <div class="data-row">P波到達: <span id="pTime" class="data-val">---</span> s</div>
+                <div class="data-row">S波到達: <span id="sTime" class="data-val">---</span> s</div>
+                <div class="data-row">PS時間: <span id="psDiff" class="data-val" style="color:#e74c3c">---</span> s</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="graph-panel">
+        <div class="graph-title">建物における揺れの観測（地震計データ）</div>
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <div class="canvas-panel">
+        <div class="instruction">地中クリック：震源 / 建物ドラッグ：観測点</div>
+        <canvas id="seismicCanvas"></canvas>
+    </div>
+</div>
+
+<script>
+    // 主要要素
+    const canvas = document.getElementById('seismicCanvas');
+    const ctx = canvas.getContext('2d');
+    const gCanvas = document.getElementById('graphCanvas');
+    const gCtx = gCanvas.getContext('2d');
+    const vPSlider = document.getElementById('vPSlider');
+    const vSSlider = document.getElementById('vSSlider');
+    const rhoSlider = document.getElementById('rhoSlider');
+    const dampSlider = document.getElementById('dampSlider');
+    const dampValDisp = document.getElementById('dampVal');
+    const pTimeDisp = document.getElementById('pTime');
+    const sTimeDisp = document.getElementById('sTime');
+    const psDiffDisp = document.getElementById('psDiff');
+    const kValDisp = document.getElementById('kVal');
+    const poiValDisp = document.getElementById('poiVal');
+    const bulkValDisp = document.getElementById('bulkVal');
+    const shearValDisp = document.getElementById('shearVal');
+    const youngValDisp = document.getElementById('youngVal');
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    let isRunning = false, isPaused = false, time = 0;
+    let particles = [], graphData = [];
+    let pArrivalDetect = null, sArrivalDetect = null;
+    const pxToKm = 0.1, groundY = 130;
+    let sourceX = 200, sourceY = 400, buildingX = 850;
+    let isDraggingBuilding = false;
+    const timeStep = 0.008, freq = 1.2, pAmp = 8, sAmp = 28;
+
+    function resize() {
+        gCanvas.width = gCanvas.offsetWidth;
+        gCanvas.height = gCanvas.offsetHeight - 25;
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        init();
+    }
+    window.addEventListener('load', resize);
+
+    function updatePhysics() {
+        const vp = parseFloat(vPSlider.value);
+        const vs = parseFloat(vSSlider.value);
+        const rho = parseFloat(rhoSlider.value); // 密度スライダーの値を取得
+        document.getElementById('rhoVal').textContent = rho.toFixed(2);
+
+        if (vp > vs) {
+            const vp2 = vp * vp, vs2 = vs * vs;
+            // 大森係数
+            kValDisp.textContent = ((vp * vs) / (vp - vs)).toFixed(2);
+            // 剛性率 mu = rho * Vs^2
+            const mu = rho * vs2;
+            shearValDisp.textContent = mu.toFixed(1);
+            // 体積弾性率 K = rho * (Vp^2 - 4/3 * Vs^2)
+            const bulk = rho * (vp2 - (4/3) * vs2);
+            bulkValDisp.textContent = bulk.toFixed(1);
+            // ポアソン比 nu
+            const nu = (vp2 - 2 * vs2) / (2 * (vp2 - vs2));
+            poiValDisp.textContent = nu.toFixed(3);
+            // ヤング率 E = 2 * mu * (1 + nu)
+            const young = 2 * mu * (1 + nu);
+            youngValDisp.textContent = young.toFixed(1);
+        } else {
+            [kValDisp, shearValDisp, bulkValDisp, poiValDisp, youngValDisp].forEach(d => d.textContent = "Error");
+        }
+    }
+
+    function init() {
+        particles = []; graphData = []; time = 0;
+        isRunning = false; isPaused = false;
+        pArrivalDetect = null; sArrivalDetect = null;
+        pTimeDisp.textContent = "---"; sTimeDisp.textContent = "---"; psDiffDisp.textContent = "---";
+        pauseBtn.textContent = "一時停止";
+        updatePhysics();
+        for(let x=0; x<=canvas.width; x+=35) {
+            for(let y=groundY+20; y<=canvas.height; y+=35) {
+                particles.push({ ox: x, oy: y });
+            }
+        }
+    }
+
+    function drawBuilding(dx, dy) {
+        const bx = buildingX + dx, by = groundY + dy;
+        ctx.lineWidth = 2; ctx.strokeStyle = "#2c3e50";
+        ctx.fillStyle = isDraggingBuilding ? "#3498db" : "#5d6d7e";
+        ctx.fillRect(bx - 25, by - 60, 50, 60); ctx.strokeRect(bx - 25, by - 60, 50, 60);
+        ctx.fillStyle = "#a04000"; ctx.beginPath(); ctx.moveTo(bx - 35, by - 60); ctx.lineTo(bx, by - 100); ctx.lineTo(bx + 35, by - 60); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#f4d03f";
+        for(let i=0; i<2; i++) for(let j=0; j<2; j++) ctx.fillRect(bx - 15 + i*20, by - 45 + j*20, 10, 10);
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#e8f5e9"; ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+        ctx.strokeStyle = "#27ae60"; ctx.fillStyle = "#27ae60"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(canvas.width, groundY); ctx.stroke();
+        for(let x=0; x<=canvas.width; x+=100) {
+            ctx.beginPath(); ctx.moveTo(x, groundY); ctx.lineTo(x, groundY - 10); ctx.stroke();
+            ctx.font = "10px Arial"; ctx.fillText((x * pxToKm).toFixed(0) + "km", x + 3, groundY - 15);
+        }
+        ctx.fillStyle = "#e74c3c"; ctx.beginPath(); ctx.arc(sourceX, sourceY, 10, 0, Math.PI*2); ctx.fill();
+        ctx.font = "bold 12px sans-serif"; ctx.fillText("震源", sourceX + 15, sourceY + 5);
+
+        const vp = parseFloat(vPSlider.value), vs = parseFloat(vSSlider.value), damp = parseFloat(dampSlider.value);
+        let bDX = 0, bDY = 0;
+        const distKm = Math.sqrt((buildingX - sourceX)**2 + (groundY - sourceY)**2) * pxToKm;
+        
+        if(isRunning && !isPaused) {
+            time += timeStep;
+            if(!pArrivalDetect && time >= distKm/vp) { pArrivalDetect = time; pTimeDisp.textContent = time.toFixed(2); }
+            if(!sArrivalDetect && time >= distKm/vs) { sArrivalDetect = time; sTimeDisp.textContent = time.toFixed(2); psDiffDisp.textContent = (sArrivalDetect - pArrivalDetect).toFixed(2); }
+        }
+
+        particles.forEach(p => {
+            const dKm = Math.sqrt((p.ox - sourceX)**2 + (p.oy - sourceY)**2) * pxToKm;
+            const angle = Math.atan2(p.oy - sourceY, p.ox - sourceX);
+            let offX = 0, offY = 0;
+            const pArr = dKm / vp, sArr = dKm / vs;
+            if (time > pArr) { const pT = time - pArr; const pOsc = Math.sin(pT * freq * 2 * Math.PI) * pAmp * Math.exp(-pT * damp); offX += pOsc * Math.cos(angle); offY += pOsc * Math.sin(angle); }
+            if (time > sArr) { const sT = time - sArr; const sOsc = Math.sin(sT * freq * 2 * Math.PI) * sAmp * Math.exp(-sT * damp * 1.3); offX += sOsc * (-Math.sin(angle)); offY += sOsc * (Math.cos(angle)); }
+            ctx.fillStyle = "rgba(44, 62, 80, 0.12)";
+            ctx.beginPath(); ctx.arc(p.ox + offX, p.oy + offY, 2, 0, Math.PI*2); ctx.fill();
+            if (Math.abs(p.ox - buildingX) < 20 && Math.abs(p.oy - (groundY+20)) < 30) { bDX = offX; bDY = offY; }
+        });
+
+        drawBuilding(bDX, bDY);
+        if (isRunning && !isPaused) graphData.push({ t: time, x: bDX, y: bDY });
+        drawGraph();
+        
+        if (isRunning) {
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = "rgba(230, 126, 34, 0.4)"; ctx.beginPath(); ctx.arc(sourceX, sourceY, (time * vp) / pxToKm, 0, Math.PI*2); ctx.stroke();
+            ctx.strokeStyle = "rgba(155, 89, 182, 0.4)"; ctx.beginPath(); ctx.arc(sourceX, sourceY, (time * vs) / pxToKm, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        requestAnimationFrame(render);
+    }
+
+    function drawGraph() {
+        gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+        const midY = gCanvas.height / 2;
+        const maxTime = Math.max(5, time);
+        const pixelsPerSec = gCanvas.width / maxTime;
+        gCtx.lineWidth = 1;
+        let step = maxTime > 20 ? 5 : (maxTime > 10 ? 2 : 1);
+        for(let s=0; s<=maxTime; s+=step) {
+            let gx = s * pixelsPerSec; gCtx.strokeStyle = "#f0f0f0";
+            gCtx.beginPath(); gCtx.moveTo(gx, 0); gCtx.lineTo(gx, gCanvas.height); gCtx.stroke();
+            gCtx.fillStyle = "#999"; gCtx.font = "10px Arial"; gCtx.fillText(s + "s", gx + 3, midY - 5);
+        }
+        gCtx.strokeStyle = "#bbb"; gCtx.beginPath(); gCtx.moveTo(0, midY); gCtx.lineTo(gCanvas.width, midY); gCtx.stroke();
+        if (graphData.length > 0) {
+            const drawW = (key, color) => {
+                gCtx.strokeStyle = color; gCtx.lineWidth = 1.5; gCtx.beginPath();
+                graphData.forEach((d, i) => {
+                    let gx = d.t * pixelsPerSec; const gy = midY - d[key] * 1;
+                    if (i === 0) gCtx.moveTo(gx, gy); else gCtx.lineTo(gx, gy);
+                });
+                gCtx.stroke();
+            };
+            drawW('x', '#9b59b6'); drawW('y', '#e67e22');
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const r = canvas.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * (canvas.width / r.width);
+        const my = (e.clientY - r.top) * (canvas.height / r.height);
+        if (Math.abs(mx - buildingX) < 30 && my < groundY + 10) { isDraggingBuilding = true; init(); }
+        else if (my > groundY + 10) { sourceX = mx; sourceY = my; init(); }
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (isDraggingBuilding) {
+            const r = canvas.getBoundingClientRect();
+            let mx = (e.clientX - r.left) * (canvas.width / r.width);
+            buildingX = Math.max(50, Math.min(canvas.width - 50, mx));
+        }
+    });
+    window.addEventListener('mouseup', () => isDraggingBuilding = false);
+
+    // スライダーイベントの紐付け
+    vPSlider.oninput = () => { document.getElementById('vPVal').textContent = vPSlider.value; updatePhysics(); };
+    vSSlider.oninput = () => { document.getElementById('vSVal').textContent = vSSlider.value; updatePhysics(); };
+    rhoSlider.oninput = () => { updatePhysics(); };
+    dampSlider.oninput = () => { dampValDisp.textContent = dampSlider.value; };
+    
+    document.getElementById('startBtn').onclick = () => { isRunning = true; isPaused = false; };
+    document.getElementById('pauseBtn').onclick = () => { if(!isRunning) return; isPaused = !isPaused; pauseBtn.textContent = isPaused ? "再開" : "一時停止"; };
+    document.getElementById('resetBtn').onclick = init;
+
+    resize(); render();
+</script>
+</body>
+</html>

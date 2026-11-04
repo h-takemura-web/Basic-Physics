@@ -137,10 +137,10 @@
             </div>
 
             <!-- 右側 2Dサブグラフ専用パネル（y-x グラフ & y-t グラフ） -->
-            <aside class="w-80 md:w-96 glass-panel border-l border-gray-800 flex flex-col h-full z-10 overflow-y-auto shrink-0 p-3 space-y-3">
+            <aside class="w-80 md:w-96 glass-panel border-l border-gray-800 flex flex-col h-full z-10 overflow-hidden shrink-0 p-3 justify-between">
                 
                 <!-- 時間経過コントロール（右上配置） -->
-                <div class="bg-slate-900/90 rounded-xl p-2.5 border border-cyan-500/40 shadow-lg">
+                <div class="bg-slate-900/90 rounded-xl p-2.5 border border-cyan-500/40 shadow-lg shrink-0">
                     <div class="flex items-center justify-between mb-1.5">
                         <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
                             <i class="fa-solid fa-clock text-cyan-400"></i> 時間コントロール
@@ -166,37 +166,39 @@
                     </div>
                 </div>
 
-                <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mt-1">
-                    <i class="fa-chart-line text-indigo-400"></i> 授業用 2D断面グラフ
-                </h2>
+                <div class="flex flex-col gap-2 shrink-0">
+                    <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-chart-line text-indigo-400"></i> 授業用 2D断面グラフ
+                    </h2>
 
-                <!-- 1. y-x グラフ（写真） -->
-                <div id="card-yx" class="bg-slate-900/90 rounded-lg p-2.5 border border-cyan-500/30">
-                    <div class="flex justify-between items-center mb-1.5 text-xs">
-                        <span class="font-bold text-cyan-400 flex items-center gap-1">
-                            <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> <i>y</i> - <i>x</i> グラフ（写真）
-                        </span>
-                        <span class="text-[10px] text-gray-400">時刻 <i>t</i> = <i>t</i><sub>now</sub> での波形</span>
+                    <!-- 1. y-x グラフ（写真） -->
+                    <div id="card-yx" class="bg-slate-900/90 rounded-lg p-2.5 border border-cyan-500/30 shrink-0">
+                        <div class="flex justify-between items-center mb-1.5 text-xs">
+                            <span class="font-bold text-cyan-400 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> <i>y</i> - <i>x</i> グラフ（写真）
+                            </span>
+                            <span class="text-[10px] text-gray-400">時刻 <i>t</i> = <i>t</i><sub>now</sub> での波形</span>
+                        </div>
+                        <canvas id="canvas-yx" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                        <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                            <span>横軸: 位置 <i>x</i> [m]</span>
+                            <span>縦軸: 変位 <i>y</i> [m]</span>
+                        </div>
                     </div>
-                    <canvas id="canvas-yx" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
-                    <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
-                        <span>横軸: 位置 <i>x</i> [m]</span>
-                        <span>縦軸: 変位 <i>y</i> [m]</span>
-                    </div>
-                </div>
 
-                <!-- 2. y-t グラフ（記録） -->
-                <div id="card-yt" class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/30">
-                    <div class="flex justify-between items-center mb-1.5 text-xs">
-                        <span class="font-bold text-amber-400 flex items-center gap-1">
-                            <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> <i>y</i> - <i>t</i> グラフ（記録）
-                        </span>
-                        <span class="text-[10px] text-gray-400">位置 <i>x</i> = <i>x</i><sub>0</sub> での振動</span>
-                    </div>
-                    <canvas id="canvas-yt" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
-                    <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
-                        <span>横軸: 時刻 <i>t</i> [s]</span>
-                        <span>縦軸: 変位 <i>y</i> [m]</span>
+                    <!-- 2. y-t グラフ（記録） -->
+                    <div id="card-yt" class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/30 shrink-0">
+                        <div class="flex justify-between items-center mb-1.5 text-xs">
+                            <span class="font-bold text-amber-400 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> <i>y</i> - <i>t</i> グラフ（記録）
+                            </span>
+                            <span class="text-[10px] text-gray-400">位置 <i>x</i> = <i>x</i><sub>0</sub> での振動</span>
+                        </div>
+                        <canvas id="canvas-yt" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                        <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                            <span>横軸: 時刻 <i>t</i> [s]</span>
+                            <span>縦軸: 変位 <i>y</i> [m]</span>
+                        </div>
                     </div>
                 </div>
             </aside>

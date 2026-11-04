@@ -99,7 +99,7 @@
         <div class="flex-1 flex overflow-hidden relative">
             <!-- 3D ビューポート (Three.js) -->
             <div id="left-viewport-container" class="flex-1 relative w-full h-full bg-slate-950 flex items-center justify-center p-3">
-                <div id="canvas-container" class="relative w-full rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+                <div id="canvas-container" class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border border-gray-800">
                     <!-- 視点切り替え＆軸モード選択 (左上オーバーレイ) -->
                     <div class="absolute top-3 left-3 z-10 flex flex-col gap-2">
                         <!-- 視点切り替え -->
@@ -1399,23 +1399,11 @@
             renderer.render(scene, camera);
         }
 
-        // 3Dビューポートの縦方向の高さを調整する処理（2Dグラフ2つの合計高度の2倍に拡大）
+        // 3Dビューポートのサイズ調整処理（右側パネルの高さと一致させる）
         function adjust3DCanvasSize() {
-            const cardYX = document.getElementById('card-yx');
-            const cardYT = document.getElementById('card-yt');
             const container3D = document.getElementById('canvas-container');
-            const leftViewport = document.getElementById('left-viewport-container');
 
-            if (cardYX && cardYT && container3D && leftViewport) {
-                // y-x グラフカードと y-t グラフカードの高さ合計の2倍に拡大
-                const totalGraphHeight = (cardYX.offsetHeight + cardYT.offsetHeight + 12) * 2;
-                
-                // 親コンテナの領域を超えない範囲で高さを調整
-                const maxHeight = leftViewport.clientHeight - 24;
-                const finalHeight = Math.min(totalGraphHeight, maxHeight);
-
-                container3D.style.height = `${finalHeight}px`;
-
+            if (container3D) {
                 const w = container3D.clientWidth;
                 const h = container3D.clientHeight;
                 if (w > 0 && h > 0) {

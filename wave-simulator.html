@@ -149,7 +149,7 @@
                             <span id="label-tnow" class="font-mono text-xs font-bold text-cyan-400 bg-slate-950 px-2 py-0.5 rounded border border-cyan-500/30">t = 0.00 s</span>
                         </div>
                         
-                        <input id="slider-t" type="range" min="0" max="20" step="0.05" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2.5">
+                        <input id="slider-t" type="range" min="0" max="30" step="0.05" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2.5">
 
                         <div class="grid grid-cols-5 gap-1.5">
                             <button id="btn-step-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ戻る">
@@ -430,9 +430,9 @@
             // 境界条件: 'none' (端なし), 'free' (自由端), 'fixed' (固定端)
             boundary: 'none',
             
-            // 範囲定義 (tMaxを10から20へ変更)
+            // 範囲定義 (tMaxを30.0に変更)
             xMax: 15.0,
-            tMax: 20.0,
+            tMax: 30.0,
             
             // 再生制御
             isPlaying: false,
@@ -1097,6 +1097,9 @@
 
         // 再生/停止
         btnPlay.addEventListener('click', () => {
+            if (!params.isPlaying && params.tNow >= params.tMax) {
+                params.tNow = 0.0;
+            }
             params.isPlaying = !params.isPlaying;
             params.speed = 1.0;
             updatePlayButtonUI();
@@ -1391,8 +1394,10 @@
 
             if (params.isPlaying) {
                 params.tNow += delta * params.speed;
-                if (params.tNow > params.tMax) {
-                    params.tNow = 0; // ループ再生
+                if (params.tNow >= params.tMax) {
+                    params.tNow = params.tMax;
+                    params.isPlaying = false;
+                    updatePlayButtonUI();
                 }
                 syncUI();
             }

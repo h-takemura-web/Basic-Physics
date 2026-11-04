@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物理基礎：正弦波の3軸(x-t-y)立体空間シミュレーション</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- MathJax for rendering math symbols -->
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            user-select: none;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            overflow: hidden;
+        }
+        /* カスタムスライダーのスタイル */
+        input[type=range] {
+            accent-color: #38bdf8;
+        }
+        /* スクロールバーのカスタマイズ */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col">
+
+    <!-- トップヘッダー -->
+    <header class="glass-panel h-14 px-4 flex items-center justify-between shrink-0 z-20 shadow-lg border-b border-gray-800">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600/30 p-2 rounded-lg border border-indigo-500/40 text-indigo-400">
+                <i class="fa-solid fa-cube text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base md:text-lg font-bold tracking-wide text-white flex items-center gap-2">
+                    高校物理基礎：正弦波の3軸 (<i>x</i> - <i>t</i> - <i>y</i>) 立体空間シミュレーション
+                </h1>
+                <p class="text-xs text-gray-400 hidden md:block">
+                    <i>y</i> = <i>A</i> sin 2π(<sup><i>t</i></sup>/<sub><i>T</i></sub> - <sup><i>x</i></sup>/<sub>λ</sub>) における「波の伝播」と「媒質の単振動」の可視化
+                </p>
+            </div>
+        </div>
+
+        <!-- 物理量ライブサマリー -->
+        <div class="hidden lg:flex items-center space-x-4 bg-gray-900/80 px-3 py-1.5 rounded-lg border border-gray-700/60 text-xs">
+            <div><span class="text-gray-400">波の速さ <i>v</i>:</span> <span id="stat-v" class="font-mono text-cyan-400 font-bold">1.67</span> <span class="text-gray-500">m/s</span></div>
+            <div class="h-3 w-[1px] bg-gray-700"></div>
+            <div><span class="text-gray-400">振動数 <i>f</i>:</span> <span id="stat-f" class="font-mono text-emerald-400 font-bold">0.33</span> <span class="text-gray-500">Hz</span></div>
+            <div class="h-3 w-[1px] bg-gray-700"></div>
+            <div><span class="text-gray-400">波長 <i>λ</i>:</span> <span id="stat-lambda" class="font-mono text-pink-400 font-bold">5.0</span> <span class="text-gray-500">m</span></div>
+            <div class="h-3 w-[1px] bg-gray-700"></div>
+            <div><span class="text-gray-400">周期 <i>T</i>:</span> <span id="stat-T" class="font-mono text-amber-400 font-bold">3.0</span> <span class="text-gray-500">s</span></div>
+        </div>
+
+        <!-- 右側アクションボタン -->
+        <div class="flex items-center space-x-2">
+            <button id="btn-guide-toggle" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 transition shadow">
+                <i class="fa-solid fa-graduation-cap"></i>
+                <span>授業解説ガイド</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ領域 -->
+    <div class="flex-1 flex flex-col overflow-hidden relative">
+
+        <!-- 上段：3Dビューポート ＋ 右側2Dサブグラフ -->
+        <div class="flex-1 flex overflow-hidden relative">
+            <!-- 3D ビューポート (Three.js) -->
+            <div id="left-viewport-container" class="flex-1 relative w-full h-full bg-slate-950 flex items-center justify-center p-3">
+                <div id="canvas-container" class="relative w-full rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+                    <!-- 視点切り替え＆軸モード選択 (左上オーバーレイ) -->
+                    <div class="absolute top-3 left-3 z-10 flex flex-col gap-2">
+                        <!-- 視点切り替え -->
+                        <div class="flex flex-wrap gap-1.5 glass-panel p-1.5 rounded-lg shadow-md">
+                            <button id="view-iso" class="px-2.5 py-1 text-xs rounded bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition">3D斜視</button>
+                            <button id="view-front" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">正面 (<i>y</i>-<i>x</i> 瞬間波形)</button>
+                            <button id="view-side" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">側面 (<i>y</i>-<i>t</i> 媒質振動)</button>
+                            <button id="view-top" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">上面 (<i>x</i>-<i>t</i> 平面波紋)</button>
+                            <button id="btn-reset-cam" class="px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition" title="カメラリセット">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </div>
+
+                        <!-- 3軸モード切り替え（物理標準 vs 数学標準） -->
+                        <div class="glass-panel p-2 rounded-lg shadow-md flex items-center gap-2 text-xs">
+                            <span class="text-gray-400 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-compass text-indigo-400"></i> 軸設定:
+                            </span>
+                            <div class="flex bg-gray-900/90 rounded p-0.5 border border-gray-700">
+                                <button id="mode-phys" class="px-2.5 py-1 rounded text-xs font-bold transition bg-indigo-600 text-white">
+                                    モードA (物理: Y = 変位 <i>y</i>)
+                                </button>
+                                <button id="mode-math" class="px-2.5 py-1 rounded text-xs font-bold transition text-gray-400 hover:text-white">
+                                    モードB (数学: Z = 変位 <i>y</i>)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3D操作ヒント (左下) -->
+                    <div class="absolute bottom-3 left-3 z-10 text-[11px] text-gray-400 glass-panel px-3 py-1.5 rounded-lg pointer-events-none hidden sm:block">
+                        <i class="fa-solid fa-hand-pointer text-indigo-400 mr-1"></i> ドラッグ: 視点回転 | 右ドラッグ: 平行移動 | ホイール: 拡大縮小
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側 2Dサブグラフ専用パネル（y-x グラフ & y-t グラフ） -->
+            <aside class="w-80 md:w-96 glass-panel border-l border-gray-800 flex flex-col h-full z-10 overflow-y-auto shrink-0 p-3 space-y-3">
+                
+                <!-- 時間経過コントロール（右上配置） -->
+                <div class="bg-slate-900/90 rounded-xl p-2.5 border border-cyan-500/40 shadow-lg">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-clock text-cyan-400"></i> 時間コントロール
+                        </span>
+                        <span id="label-tnow" class="font-mono text-xs font-bold text-cyan-400 bg-slate-950 px-2 py-0.5 rounded border border-cyan-500/30">t = 0.00 s</span>
+                    </div>
+                    
+                    <input id="slider-t" type="range" min="0" max="20" step="0.05" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2.5">
+
+                    <div class="grid grid-cols-5 gap-1.5">
+                        <button id="btn-step-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ戻る">
+                            <i class="fa-solid fa-backward-step"></i>
+                        </button>
+                        <button id="btn-play" class="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-1.5 rounded font-bold transition flex items-center justify-center gap-1.5 shadow">
+                            <i class="fa-solid fa-play"></i> <span>再生</span>
+                        </button>
+                        <button id="btn-step-next" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ進む">
+                            <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                        <button id="btn-reset-time" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="最初へ">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5 mt-1">
+                    <i class="fa-chart-line text-indigo-400"></i> 授業用 2D断面グラフ
+                </h2>
+
+                <!-- 1. y-x グラフ（写真） -->
+                <div id="card-yx" class="bg-slate-900/90 rounded-lg p-2.5 border border-cyan-500/30">
+                    <div class="flex justify-between items-center mb-1.5 text-xs">
+                        <span class="font-bold text-cyan-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> <i>y</i> - <i>x</i> グラフ（写真）
+                        </span>
+                        <span class="text-[10px] text-gray-400">時刻 <i>t</i> = <i>t</i><sub>now</sub> での波形</span>
+                    </div>
+                    <canvas id="canvas-yx" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                    <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                        <span>横軸: 位置 <i>x</i> [m]</span>
+                        <span>縦軸: 変位 <i>y</i> [m]</span>
+                    </div>
+                </div>
+
+                <!-- 2. y-t グラフ（記録） -->
+                <div id="card-yt" class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/30">
+                    <div class="flex justify-between items-center mb-1.5 text-xs">
+                        <span class="font-bold text-amber-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> <i>y</i> - <i>t</i> グラフ（記録）
+                        </span>
+                        <span class="text-[10px] text-gray-400">位置 <i>x</i> = <i>x</i><sub>0</sub> での振動</span>
+                    </div>
+                    <canvas id="canvas-yt" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                    <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                        <span>横軸: 時刻 <i>t</i> [s]</span>
+                        <span>縦軸: 変位 <i>y</i> [m]</span>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- 下段：各種設定・コントロールパラメータ（左下から右下に横並び配置） -->
+        <footer class="glass-panel border-t border-gray-800 p-2.5 z-20 shrink-0 overflow-x-auto">
+            <div class="flex items-start gap-3.5 min-w-max">
+
+                <!-- 左グループ: 注目粒子 ＆ 波のパラメータ -->
+                <div class="flex flex-col gap-2.5 w-72">
+                    <!-- 1. 注目粒子 (x0) 設定 -->
+                    <div class="bg-amber-950/20 rounded-xl p-2.5 border border-amber-500/30 flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-xs mb-1">
+                            <label class="text-amber-300 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-location-dot text-amber-400"></i> 注目粒子 (<i>x</i><sub>0</sub>)
+                            </label>
+                            <div class="flex items-center gap-1">
+                                <span id="val-particle-idx" class="font-mono text-[10px] text-amber-300/80 bg-amber-950/60 px-1 py-0.5 rounded border border-amber-500/30">粒子 #11</span>
+                                <span id="val-x0" class="font-mono text-amber-400 font-bold text-xs">5.00 m</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <button id="btn-prev-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="前の粒子へ">
+                                <i class="fa-solid fa-chevron-left"></i> 前
+                            </button>
+                            <input id="slider-x0" type="range" min="0" max="15" step="0.5" value="5" class="w-full h-1.5 bg-gray-700 rounded appearance-none cursor-pointer">
+                            <button id="btn-next-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="次の粒子へ">
+                                次 <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="text-[10px] text-gray-400 flex items-center">
+                            <span><i class="fa-solid fa-hand-pointer text-amber-400/80 mr-1"></i>3D球クリック選択可</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. 波の基本要素パラメータ (A, lambda, T) -->
+                    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between space-y-1">
+                        <div class="text-xs font-bold text-gray-300 flex items-center gap-1 mb-0.5">
+                            <i class="fa-sliders text-indigo-400"></i> 波のパラメータ
+                        </div>
+                        <!-- 振幅 A -->
+                        <div class="flex items-center justify-between text-[11px] gap-2">
+                            <span class="text-gray-300 w-16 shrink-0">振幅 <i>A</i>:</span>
+                            <input id="slider-A" type="range" min="0.5" max="3.0" step="0.1" value="1.5" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                            <span id="val-A" class="font-mono text-indigo-400 font-bold w-12 text-right shrink-0">1.50 m</span>
+                        </div>
+                        <!-- 波長 lambda -->
+                        <div class="flex items-center justify-between text-[11px] gap-2">
+                            <span class="text-gray-300 w-16 shrink-0">波長 <i>λ</i>:</span>
+                            <input id="slider-lambda" type="range" min="2.0" max="10.0" step="0.2" value="5.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                            <span id="val-lambda" class="font-mono text-pink-400 font-bold w-12 text-right shrink-0">5.00 m</span>
+                        </div>
+                        <!-- 周期 T -->
+                        <div class="flex items-center justify-between text-[11px] gap-2">
+                            <span class="text-gray-300 w-16 shrink-0">周期 <i>T</i>:</span>
+                            <input id="slider-T" type="range" min="1.0" max="6.0" step="0.1" value="3.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                            <span id="val-T" class="font-mono text-amber-400 font-bold w-12 text-right shrink-0">3.00 s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右グループ: 右端の境界条件 ＆ 3D表示トグル -->
+                <div class="flex flex-col gap-2.5 w-80">
+                    <!-- 3. 右端の境界条件 -->
+                    <div class="bg-indigo-950/40 rounded-xl p-2.5 border border-indigo-500/30 flex flex-col justify-between">
+                        <label class="text-xs text-indigo-300 font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-border-all"></i> 右端の境界条件
+                        </label>
+                        <div class="grid grid-cols-1 gap-1 my-1 text-xs">
+                            <div class="grid grid-cols-3 gap-1">
+                                <button id="btn-bound-none" class="px-2 py-1.5 rounded font-bold transition bg-indigo-600 text-white text-[11px]">端なし</button>
+                                <button id="btn-bound-free" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">自由端</button>
+                                <button id="btn-bound-fixed" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">固定端</button>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-indigo-300/70">波の反射と重ね合わせ</span>
+                    </div>
+
+                    <!-- 4. 3D要素表示/非表示 (横3つ×縦2つ配置) -->
+                    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="text-xs font-bold text-gray-300 flex items-center gap-1">
+                                <i class="fa-eye text-indigo-400"></i> 3D要素の表示 / 非表示
+                            </div>
+                        </div>
+
+                        <!-- t軸軌跡描画トグル -->
+                        <label class="flex items-center space-x-1.5 bg-indigo-950/60 px-2 py-1 rounded cursor-pointer border border-indigo-500/40 hover:border-indigo-400 mb-1.5 text-[11px]">
+                            <input type="checkbox" id="chk-trail" checked class="rounded text-indigo-500 focus:ring-0">
+                            <span class="text-indigo-300 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-pen-nib text-amber-400"></i> <i>t</i>軸軌跡描画 (0 → <i>t</i><sub>now</sub>)
+                            </span>
+                        </label>
+
+                        <!-- 6つの項目：横3つ × 縦2つのグリッド配置 -->
+                        <div class="grid grid-cols-3 gap-1 text-[10px]">
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-surface" class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-gray-300 truncate">3D曲面(青)</span>
+                            </label>
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-particles" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-amber-400 font-bold truncate">媒質粒子</span>
+                            </label>
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-slice-yx" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-cyan-400 font-medium truncate"><i>y</i>-<i>x</i>断面</span>
+                            </label>
+
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-slice-yt" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-amber-400 font-medium truncate"><i>y</i>-<i>t</i>軌跡</span>
+                            </label>
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-vectors" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-gray-300 truncate">速度ベクトル</span>
+                            </label>
+                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                <input type="checkbox" id="chk-grid" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-gray-300 truncate">軸・グリッド</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </footer>
+    </div>
+
+    <!-- 授業解説用ポップアップガイド Modal -->
+    <div id="guide-modal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="glass-panel bg-slate-900 border border-indigo-500/30 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-indigo-950/40">
+                <div class="flex items-center gap-2 text-indigo-400">
+                    <i class="fa-solid fa-graduation-cap text-xl"></i>
+                    <h3 class="font-bold text-lg text-white">授業解説ポイント：3軸空間で捉える正弦波</h3>
+                </div>
+                <button id="btn-close-modal" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 overflow-y-auto space-y-5 text-sm text-gray-300 leading-relaxed">
+                
+                <div class="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
+                    <h4 class="font-bold text-indigo-300 text-base mb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-lightbulb text-amber-400"></i> 生徒がつまずきやすい「2つのグラフ」の根本的違い
+                    </h4>
+                    <p class="text-xs text-gray-300">
+                        高校物理基礎で多くの生徒が混乱する「$y-x$ グラフ」と「$y-t$ グラフ」。形はどちらも綺麗な正弦曲線（サイン波）ですが、**見ている対象（軸の意味）が全く異なります**。
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- y-x グラフの解説 -->
+                    <div class="bg-cyan-950/20 p-4 rounded-xl border border-cyan-500/30 space-y-2">
+                        <div class="flex items-center gap-2 text-cyan-400 font-bold text-base">
+                            <i class="fa-solid fa-camera"></i> y - x グラフ（写真）
+                        </div>
+                        <ul class="list-disc list-inside text-xs space-y-1.5 text-gray-300">
+                            <li>ある**「瞬間（固定された時間 $t_{now}$）」**の波全体を真横から写真で撮ったもの。</li>
+                            <li>横軸は**位置 $x$ [m]**。</li>
+                            <li>波1個分の長さから **波長 $\lambda$ [m]** が読み取れる。</li>
+                            <li>3D空間では、時間軸 $t$ に垂直な**青色の断面**にあたります。</li>
+                        </ul>
+                    </div>
+
+                    <!-- y-t グラフの解説 -->
+                    <div class="bg-amber-950/20 p-4 rounded-xl border border-amber-500/30 space-y-2">
+                        <div class="flex items-center gap-2 text-amber-400 font-bold text-base">
+                            <i class="fa-solid fa-video"></i> y - t グラフ（ムービー/記録）
+                        </div>
+                        <ul class="list-disc list-inside text-xs space-y-1.5 text-gray-300">
+                            <li>ある**「場所（固定された位置 $x_0$）」**にある媒質1点に着目し、その上下振動を時間追跡したもの。</li>
+                            <li>横軸は**時間 $t$ [s]**。</li>
+                            <li>1回振動する時間から **周期 $T$ [s]** が読み取れる。</li>
+                            <li>3D空間では、位置軸 $x$ に垂直な**黄色の断面**にあたります。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 媒質の運動についての指導ポイント -->
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-gray-700 space-y-2">
+                    <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-up-down text-emerald-400"></i> 「媒質はその場で上下運動しているだけ」を強調する
+                    </h4>
+                    <p class="text-xs text-gray-300">
+                        波が $x$ 正方向に進むとき、媒質（赤や青のボール）自体は右へ進んでいるのではなく、**$y$ 軸方向に上下単振動**をしているだけです。この3Dモデルの粒子を観察させることで、「進んでいるのは波の形（位相・エネルギー）である」という概念が直感的に理解できます。
+                    </p>
+                </div>
+
+                <!-- 式の導出・関係 -->
+                <div class="p-3 bg-gray-950 rounded-lg text-xs font-mono text-gray-400 border border-gray-800 space-y-1">
+                    <div class="text-indigo-400 font-bold">【波の基本式】</div>
+                    <div>波の速度: $v = \frac{\lambda}{T} = f \lambda$</div>
+                    <div>変位の式: $y(x, t) = A \sin 2\pi \left( \frac{t}{T} - \frac{x}{\lambda} \right)$</div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 border-t border-gray-800 bg-slate-950 text-right">
+                <button id="btn-close-modal-bottom" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-5 py-2 rounded-lg font-bold transition">
+                    閉じてシミュレーションに戻る
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- シミュレーションロジック (JavaScript) -->
+    <script>
+        // --- 1. グローバルパラメータ・状態変数 ---
+        const params = {
+            A: 1.5,         // 振幅 [m]
+            lambda: 5.0,    // 波長 [m]
+            T: 3.0,         // 周期 [s]
+            x0: 5.0,        // 注目位置 [m]
+            tNow: 0.0,      // 現在時刻 [s]
+            
+            // 軸マッピングモード: 'A' (物理: Y=変位y, Z=時間t) / 'B' (数学: Y=時間t, Z=変位y)
+            axisMode: 'A',
+
+            // 境界条件: 'none' (端なし), 'free' (自由端), 'fixed' (固定端)
+            boundary: 'none',
+            
+            // 範囲定義 (tMaxを10から20へ変更)
+            xMax: 15.0,
+            tMax: 20.0,
+            
+            // 再生制御
+            isPlaying: false,
+            speed: 1.0,
+            
+            // 軌跡リアルタイム描画モード
+            trailMode: true,
+            
+            // 表示トグル (3D青曲面のみ非表示にし、y-x断面波形・全粒子のy軸単振動・y-t軌跡を表示)
+            showSurface: false,
+            showParticles: true,
+            showAllParticles: true,
+            showSliceYX: true,
+            showSliceYT: true,
+            showVectors: true,
+            showGrid: true
+        };
+
+        // 3D空間のスケール対応
+        const WORLD_X = 16.0;  // 物理x=0..15 -> 3D X=-8..8
+        const WORLD_T = 16.0;  // 物理t=0..10 -> 3D Z/Y
+        const WORLD_Y = 6.0;   // 物理y=-3..3 -> 3D Y/Z
+
+        // 物理座標 (x, t, y) -> Three.js 3D座標変換関数 (軸モード依存)
+        function physTo3D(x, t, y) {
+            const normalizedX = (x / params.xMax - 0.5) * WORLD_X;
+            const normalizedT = (t / params.tMax - 0.5) * WORLD_T;
+            const normalizedY = (y / 3.0) * (WORLD_Y / 2.0);
+
+            if (params.axisMode === 'A') {
+                return new THREE.Vector3(normalizedX, normalizedY, normalizedT);
+            } else {
+                return new THREE.Vector3(normalizedX, normalizedT, normalizedY);
+            }
+        }
+
+        // 正弦波変位計算（端反射モデル対応）
+        function calcDisplacement(x, t) {
+            const v = params.lambda / params.T;
+
+            // 1. 入射波 (右進波)
+            let y1 = 0.0;
+            const xFront1 = v * t;
+            if (x <= xFront1) {
+                const phase1 = 2 * Math.PI * (t / params.T - x / params.lambda);
+                y1 = params.A * Math.sin(phase1);
+            }
+
+            // 2. 反射波 (左進波)
+            let y2 = 0.0;
+            if (params.boundary !== 'none') {
+                const xEnd = params.xMax;
+                const dist2 = 2 * xEnd - x; // 反射波の移動距離
+                const xFront2 = v * t;
+                if (dist2 <= xFront2) {
+                    const phase2 = 2 * Math.PI * (t / params.T - dist2 / params.lambda);
+                    if (params.boundary === 'free') {
+                        y2 = params.A * Math.sin(phase2); // 自由端：同位相
+                    } else if (params.boundary === 'fixed') {
+                        y2 = -params.A * Math.sin(phase2); // 固定端：逆位相
+                    }
+                }
+            }
+
+            return y1 + y2;
+        }
+
+        // 媒質の速度計算（端反射モデル対応）
+        function calcVelocity(x, t) {
+            const v = params.lambda / params.T;
+
+            // 1. 入射波の速度成分
+            let vy1 = 0.0;
+            const xFront1 = v * t;
+            if (x <= xFront1) {
+                const phase1 = 2 * Math.PI * (t / params.T - x / params.lambda);
+                vy1 = (2 * Math.PI * params.A / params.T) * Math.cos(phase1);
+            }
+
+            // 2. 反射波の速度成分
+            let vy2 = 0.0;
+            if (params.boundary !== 'none') {
+                const xEnd = params.xMax;
+                const dist2 = 2 * xEnd - x;
+                const xFront2 = v * t;
+                if (dist2 <= xFront2) {
+                    const phase2 = 2 * Math.PI * (t / params.T - dist2 / params.lambda);
+                    if (params.boundary === 'free') {
+                        vy2 = (2 * Math.PI * params.A / params.T) * Math.cos(phase2);
+                    } else if (params.boundary === 'fixed') {
+                        vy2 = -(2 * Math.PI * params.A / params.T) * Math.cos(phase2);
+                    }
+                }
+            }
+
+            return vy1 + vy2;
+        }
+
+        // --- 2. Three.js 初期化 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0f19);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // ライティング
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight1.position.set(20, 30, 20);
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
+        dirLight2.position.set(-20, -10, -20);
+        scene.add(dirLight2);
+
+        // カメラ視点プリセット設定
+        function setCameraPreset(type) {
+            const center = new THREE.Vector3(0, 0, 0);
+            if (params.axisMode === 'A') {
+                switch(type) {
+                    case 'iso': camera.position.set(16, 14, 20); break;
+                    case 'front': camera.position.set(0, 0, 24); break; // y-x 面
+                    case 'side': camera.position.set(24, 0, 0); break;  // y-t 面
+                    case 'top': camera.position.set(0, 26, 0.001); break; // x-t 面
+                }
+            } else {
+                switch(type) {
+                    case 'iso': camera.position.set(16, 20, 14); break;
+                    case 'front': camera.position.set(0, 24, 0.001); break; // z-x (変位-位置) 面
+                    case 'side': camera.position.set(24, 0, 0); break;   // z-y (変位-時間) 面
+                    case 'top': camera.position.set(0, 0, 26); break;   // y-x (時間-位置) 面
+                }
+            }
+            controls.target.copy(center);
+            controls.update();
+        }
+
+        // --- 3. 3Dオブジェクト構築 ---
+        const groupMain = new THREE.Group();
+        scene.add(groupMain);
+
+        const groupGrid = new THREE.Group();
+        groupMain.add(groupGrid);
+
+        // テキストスプライト生成ヘルパー
+        function createTextSprite(text, colorStr, fontSize = 32) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = colorStr;
+            ctx.font = `Bold ${fontSize}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 150, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(4.5, 2, 1);
+            return sprite;
+        }
+
+        // 3軸矢印ヘルパー
+        let axesObjects = [];
+        function rebuildAxes() {
+            // 既存の軸オブジェクトの消去
+            axesObjects.forEach(obj => groupGrid.remove(obj));
+            axesObjects = [];
+
+            const isA = params.axisMode === 'A';
+
+            // X軸（赤）: 位置 x
+            const startX = physTo3D(0, 0, 0);
+            const endX = physTo3D(params.xMax, 0, 0);
+            const xAxisGeo = new THREE.BufferGeometry().setFromPoints([startX, endX]);
+            const xAxisMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 3 });
+            const lineX = new THREE.Line(xAxisGeo, xAxisMat);
+            groupGrid.add(lineX); axesObjects.push(lineX);
+
+            // X軸 矢印コーン
+            const coneX = new THREE.Mesh(
+                new THREE.ConeGeometry(0.2, 0.6, 12),
+                new THREE.MeshBasicMaterial({ color: 0xf43f5e })
+            );
+            coneX.position.copy(endX);
+            coneX.rotation.z = -Math.PI / 2;
+            groupGrid.add(coneX); axesObjects.push(coneX);
+
+            const labelX = createTextSprite("X軸: 位置 x [m]", "#f43f5e");
+            labelX.position.copy(physTo3D(params.xMax + 1.5, 0, 0));
+            groupGrid.add(labelX); axesObjects.push(labelX);
+
+            // Y軸（緑）: モードA:変位y / モードB:時間t
+            const startY = isA ? physTo3D(0, 0, -3) : physTo3D(0, 0, 0);
+            const endY = isA ? physTo3D(0, 0, 3) : physTo3D(0, params.tMax, 0);
+            const yAxisGeo = new THREE.BufferGeometry().setFromPoints([startY, endY]);
+            const yAxisMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 3 });
+            const lineY = new THREE.Line(yAxisGeo, yAxisMat);
+            groupGrid.add(lineY); axesObjects.push(lineY);
+
+            const coneY = new THREE.Mesh(
+                new THREE.ConeGeometry(0.2, 0.6, 12),
+                new THREE.MeshBasicMaterial({ color: 0x10b981 })
+            );
+            coneY.position.copy(endY);
+            if (!isA) coneY.rotation.x = Math.PI / 2;
+            groupGrid.add(coneY); axesObjects.push(coneY);
+
+            const labelYText = isA ? "Y軸: 変位 y [m]" : "Y軸: 時間 t [s]";
+            const labelY = createTextSprite(labelYText, "#10b981");
+            labelY.position.copy(isA ? physTo3D(0, 0, 3.5) : physTo3D(0, params.tMax + 1.5, 0));
+            groupGrid.add(labelY); axesObjects.push(labelY);
+
+            // Z軸（青）: モードA:時間t / モードB:変位y
+            const startZ = isA ? physTo3D(0, 0, 0) : physTo3D(0, 0, -3);
+            const endZ = isA ? physTo3D(0, params.tMax, 0) : physTo3D(0, 0, 3);
+            const zAxisGeo = new THREE.BufferGeometry().setFromPoints([startZ, endZ]);
+            const zAxisMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 3 });
+            const lineZ = new THREE.Line(zAxisGeo, zAxisMat);
+            groupGrid.add(lineZ); axesObjects.push(lineZ);
+
+            const coneZ = new THREE.Mesh(
+                new THREE.ConeGeometry(0.2, 0.6, 12),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+            );
+            coneZ.position.copy(endZ);
+            if (isA) coneZ.rotation.x = Math.PI / 2;
+            groupGrid.add(coneZ); axesObjects.push(coneZ);
+
+            const labelZText = isA ? "Z軸: 時間 t [s]" : "Z軸: 変位 y [m]";
+            const labelZ = createTextSprite(labelZText, "#38bdf8");
+            labelZ.position.copy(isA ? physTo3D(0, params.tMax + 1.5, 0) : physTo3D(0, 0, 3.5));
+            groupGrid.add(labelZ); axesObjects.push(labelZ);
+
+            // 平面グリッド
+            const gridXZ = new THREE.GridHelper(WORLD_X, 10, 0x374151, 0x1f2937);
+            const gridCenter = physTo3D(params.xMax / 2, params.tMax / 2, 0);
+            gridXZ.position.set(0, isA ? physTo3D(0,0,0).y : 0, 0);
+            groupGrid.add(gridXZ); axesObjects.push(gridXZ);
+        }
+        rebuildAxes();
+        setCameraPreset('iso');
+
+        // 3D波形曲面 Mesh
+        const surfaceResX = 80;
+        const surfaceResT = 80;
+        const surfaceGeo = new THREE.PlaneGeometry(WORLD_X, WORLD_T, surfaceResX, surfaceResT);
+        surfaceGeo.rotateX(-Math.PI / 2);
+
+        const surfaceMat = new THREE.MeshPhongMaterial({
+            color: 0x4158d0,
+            emissive: 0x111827,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.55,
+            shininess: 80
+        });
+        const surfaceMesh = new THREE.Mesh(surfaceGeo, surfaceMat);
+        groupMain.add(surfaceMesh);
+
+        const wireframeMat = new THREE.MeshBasicMaterial({
+            color: 0x6366f1,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.15
+        });
+        const wireframeMesh = new THREE.Mesh(surfaceGeo, wireframeMat);
+        groupMain.add(wireframeMesh);
+
+        // 断面スライス (y-x面 及び y-t面)
+        const sliceYXPlaneGeo = new THREE.PlaneGeometry(WORLD_X, WORLD_Y);
+        const sliceYXPlaneMat = new THREE.MeshBasicMaterial({
+            color: 0x06b6d4,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.12
+        });
+        const sliceYXPlaneMesh = new THREE.Mesh(sliceYXPlaneGeo, sliceYXPlaneMat);
+        groupMain.add(sliceYXPlaneMesh);
+
+        const lineYXGeo = new THREE.BufferGeometry();
+        const lineYXMat = new THREE.LineBasicMaterial({ color: 0x22d3ee, linewidth: 4 });
+        const lineYXMesh = new THREE.Line(lineYXGeo, lineYXMat);
+        groupMain.add(lineYXMesh);
+
+        const sliceYTPlaneGeo = new THREE.PlaneGeometry(WORLD_T, WORLD_Y);
+        sliceYTPlaneGeo.rotateY(Math.PI / 2);
+        const sliceYTPlaneMat = new THREE.MeshBasicMaterial({
+            color: 0xf59e0b,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.12
+        });
+        const sliceYTPlaneMesh = new THREE.Mesh(sliceYTPlaneGeo, sliceYTPlaneMat);
+        groupMain.add(sliceYTPlaneMesh);
+
+        const lineYTGeo = new THREE.BufferGeometry();
+        const lineYTMat = new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 4 });
+        const lineYTMesh = new THREE.Line(lineYTGeo, lineYTMat);
+        groupMain.add(lineYTMesh);
+
+        // 媒質粒子と速度ベクトル
+        const numParticles = 31;
+        const particleMeshes = [];
+        const vectorArrows = [];
+
+        const sphereGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const particleMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3 });
+        const highlightParticleMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.1, emissive: 0xd97706 });
+
+        const groupParticles = new THREE.Group();
+        groupMain.add(groupParticles);
+
+        for (let i = 0; i < numParticles; i++) {
+            const pMesh = new THREE.Mesh(sphereGeo, particleMat);
+            pMesh.userData = { particleIndex: i, xPos: (i / (numParticles - 1)) * params.xMax };
+            groupParticles.add(pMesh);
+            particleMeshes.push(pMesh);
+
+            const arrow = new THREE.ArrowHelper(
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(0, 0, 0),
+                1.0,
+                0x34d399,
+                0.3,
+                0.2
+            );
+            groupParticles.add(arrow);
+            vectorArrows.push(arrow);
+        }
+
+        // 3D空間での粒子直接クリック選択用 Raycaster
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let pointerDownPos = { x: 0, y: 0 };
+
+        container.addEventListener('pointerdown', (e) => {
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+        });
+
+        container.addEventListener('pointerup', (e) => {
+            // ドラッグ操作（移動量が5px以上）の場合はクリック判定しない
+            const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+            if (dist > 5) return;
+
+            const rect = container.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(particleMeshes);
+
+            if (intersects.length > 0) {
+                const hitObj = intersects[0].object;
+                if (hitObj.userData && hitObj.userData.xPos !== undefined) {
+                    params.x0 = hitObj.userData.xPos;
+                    syncUI();
+                }
+            }
+        });
+
+        container.addEventListener('pointermove', (e) => {
+            const rect = container.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(particleMeshes);
+            container.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+        });
+
+        // 最初の山に付ける「波の進行方向」3D矢印＆ラベル
+        const groupCrestArrow = new THREE.Group();
+        groupMain.add(groupCrestArrow);
+
+        const crestArrowMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x990033, roughness: 0.2 });
+        const arrowCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 12), crestArrowMat);
+        arrowCylinder.rotation.z = -Math.PI / 2;
+        arrowCylinder.position.x = 0.7;
+        groupCrestArrow.add(arrowCylinder);
+
+        const arrowCone = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 12), crestArrowMat);
+        arrowCone.rotation.z = -Math.PI / 2;
+        arrowCone.position.x = 1.4 + 0.25;
+        groupCrestArrow.add(arrowCone);
+
+        const crestLabel = createTextSprite("波の進行方向 v", "#ff0055", 34);
+        crestLabel.position.set(0.9, 0.7, 0);
+        groupCrestArrow.add(crestLabel);
+
+        // --- 右端境界条件表示用3Dオブジェクト ---
+        const groupBoundary = new THREE.Group();
+        groupMain.add(groupBoundary);
+
+        // 自由端用ガイドポール
+        const poleGeo = new THREE.CylinderGeometry(0.06, 0.06, WORLD_Y + 1.2, 16);
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.8, roughness: 0.2 });
+        const boundaryPole = new THREE.Mesh(poleGeo, poleMat);
+        groupBoundary.add(boundaryPole);
+
+        // 自由端用スライドリング
+        const ringGeo = new THREE.TorusGeometry(0.3, 0.08, 16, 24);
+        const ringMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7 });
+        const boundaryRing = new THREE.Mesh(ringGeo, ringMat);
+        groupBoundary.add(boundaryRing);
+
+        // 固定端用ブロック（壁・クランプ）
+        const clampGeo = new THREE.BoxGeometry(0.5, 0.9, 0.9);
+        const clampMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.4, roughness: 0.3 });
+        const boundaryClamp = new THREE.Mesh(clampGeo, clampMat);
+        groupBoundary.add(boundaryClamp);
+
+        let boundaryLabel = createTextSprite("", "#ffffff", 32);
+        groupBoundary.add(boundaryLabel);
+
+        function updateBoundary3D() {
+            const isA = params.axisMode === 'A';
+            const xEnd = params.xMax;
+            const yEnd = calcDisplacement(xEnd, params.tNow);
+
+            const p3dBase = physTo3D(xEnd, params.tNow, 0);
+            const p3dEnd = physTo3D(xEnd, params.tNow, yEnd);
+
+            if (params.boundary === 'free') {
+                groupBoundary.visible = true;
+                boundaryPole.visible = true;
+                boundaryRing.visible = true;
+                boundaryClamp.visible = false;
+
+                boundaryPole.position.copy(p3dBase);
+                boundaryPole.rotation.x = isA ? 0 : Math.PI / 2;
+
+                boundaryRing.position.copy(p3dEnd);
+                boundaryRing.rotation.x = isA ? Math.PI / 2 : 0;
+                boundaryRing.rotation.y = isA ? 0 : Math.PI / 2;
+
+                groupBoundary.remove(boundaryLabel);
+                boundaryLabel = createTextSprite("自由端 (反射: 同位相)", "#38bdf8", 32);
+                boundaryLabel.position.copy(physTo3D(xEnd + 0.8, params.tNow, 2.2));
+                groupBoundary.add(boundaryLabel);
+
+            } else if (params.boundary === 'fixed') {
+                groupBoundary.visible = true;
+                boundaryPole.visible = false;
+                boundaryRing.visible = false;
+                boundaryClamp.visible = true;
+
+                boundaryClamp.position.copy(p3dBase);
+
+                groupBoundary.remove(boundaryLabel);
+                boundaryLabel = createTextSprite("固定端 (反射: 逆位相)", "#ef4444", 32);
+                boundaryLabel.position.copy(physTo3D(xEnd + 0.8, params.tNow, 2.2));
+                groupBoundary.add(boundaryLabel);
+
+            } else {
+                groupBoundary.visible = true;
+                boundaryPole.visible = false;
+                boundaryRing.visible = false;
+                boundaryClamp.visible = false;
+
+                groupBoundary.remove(boundaryLabel);
+                boundaryLabel = createTextSprite("端なし", "#9ca3af", 28);
+                boundaryLabel.position.copy(physTo3D(xEnd + 0.8, params.tNow, 1.8));
+                groupBoundary.add(boundaryLabel);
+            }
+        }
+
+        // --- 4. 3Dモデルデータの動的更新 ---
+        function update3DScene() {
+            const isA = params.axisMode === 'A';
+            const tUpper = params.trailMode ? Math.max(0.001, params.tNow) : params.tMax;
+
+            // A. 3D曲面の頂点位置更新 (0 〜 tUpper までの領域を動的メッシュ描画)
+            const posAttr = surfaceGeo.attributes.position;
+            let index = 0;
+            for (let j = 0; j <= surfaceResT; j++) {
+                const tVal = (j / surfaceResT) * tUpper;
+                for (let i = 0; i <= surfaceResX; i++) {
+                    const xVal = (i / surfaceResX) * params.xMax;
+                    const yVal = calcDisplacement(xVal, tVal);
+
+                    const p3d = physTo3D(xVal, tVal, yVal);
+                    // PlaneGeometry(XZ平面)からの変形
+                    posAttr.setXYZ(index, p3d.x, p3d.y, p3d.z);
+                    index++;
+                }
+            }
+            posAttr.needsUpdate = true;
+            surfaceGeo.computeVertexNormals();
+
+            // B. t_now 断面（y-x）
+            const posSliceYX = physTo3D(params.xMax / 2, params.tNow, 0);
+            sliceYXPlaneMesh.position.copy(posSliceYX);
+            sliceYXPlaneMesh.rotation.set(0, 0, 0);
+            if (!isA) sliceYXPlaneMesh.rotateX(Math.PI / 2);
+
+            const pointsYX = [];
+            for (let i = 0; i <= 100; i++) {
+                const xVal = (i / 100) * params.xMax;
+                const yVal = calcDisplacement(xVal, params.tNow);
+                pointsYX.push(physTo3D(xVal, params.tNow, yVal));
+            }
+            lineYXGeo.setFromPoints(pointsYX);
+
+            // C. x0 断面（y-t） 軌跡 (0 〜 tUpper まで伸ばす)
+            const posSliceYT = physTo3D(params.x0, tUpper / 2, 0);
+            sliceYTPlaneMesh.position.copy(posSliceYT);
+            sliceYTPlaneMesh.scale.set(tUpper / params.tMax, 1, 1);
+            sliceYTPlaneMesh.rotation.set(0, Math.PI / 2, 0);
+
+            const pointsYT = [];
+            for (let j = 0; j <= 100; j++) {
+                const tVal = (j / 100) * tUpper;
+                const yVal = calcDisplacement(params.x0, tVal);
+                pointsYT.push(physTo3D(params.x0, tVal, yVal));
+            }
+            lineYTGeo.setFromPoints(pointsYT);
+
+            // D. 媒質粒子と速度ベクトル
+            const dirVec = isA ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+            for (let i = 0; i < numParticles; i++) {
+                const xVal = (i / (numParticles - 1)) * params.xMax;
+                const yVal = calcDisplacement(xVal, params.tNow);
+                const vyVal = calcVelocity(xVal, params.tNow);
+
+                const p3d = physTo3D(xVal, params.tNow, yVal);
+                particleMeshes[i].position.copy(p3d);
+
+                const isHighlighted = Math.abs(xVal - params.x0) < (params.xMax / numParticles / 1.5);
+                particleMeshes[i].material = isHighlighted ? highlightParticleMat : particleMat;
+                particleMeshes[i].scale.setScalar(isHighlighted ? 1.4 : 1.0);
+
+                // 全媒質粒子のy軸方向の単振動および注目粒子の両方を表示
+                particleMeshes[i].visible = params.showParticles && (isHighlighted || params.showAllParticles);
+
+                const arrow = vectorArrows[i];
+                if (params.showVectors && particleMeshes[i].visible && Math.abs(vyVal) > 0.001) {
+                    arrow.visible = true;
+                    arrow.position.copy(p3d);
+                    const currentDir = dirVec.clone().multiplyScalar(vyVal >= 0 ? 1 : -1);
+                    arrow.setDirection(currentDir);
+                    const len = Math.abs(vyVal) * 0.3;
+                    arrow.setLength(Math.max(len, 0.001), Math.min(len * 0.3, 0.3), 0.15);
+                } else {
+                    arrow.visible = false;
+                }
+            }
+
+            // E. 最初の山の上の進行方向矢印の更新
+            const vSpeed = params.lambda / params.T;
+            const xCrest1 = vSpeed * params.tNow - 0.25 * params.lambda; // 最初の山 (位相 90deg)
+
+            if (xCrest1 >= 0 && xCrest1 <= params.xMax && params.tNow >= 0.25 * params.T && params.boundary === 'none') {
+                groupCrestArrow.visible = true;
+                const yCrest = params.A + 0.6; // 山の頂点の上部
+                const p3d = physTo3D(xCrest1, params.tNow, yCrest);
+                groupCrestArrow.position.copy(p3d);
+            } else {
+                groupCrestArrow.visible = false;
+            }
+
+            // F. 右端境界の更新
+            updateBoundary3D();
+
+            // 表示トグル
+            surfaceMesh.visible = params.showSurface;
+            wireframeMesh.visible = params.showSurface;
+            groupParticles.visible = params.showParticles;
+            sliceYXPlaneMesh.visible = params.showSliceYX;
+            lineYXMesh.visible = params.showSliceYX;
+            sliceYTPlaneMesh.visible = params.showSliceYT;
+            lineYTMesh.visible = params.showSliceYT;
+            groupGrid.visible = params.showGrid;
+        }
+
+        // --- 5. コマ送り・UI制御 ---
+        const sliderT = document.getElementById('slider-t');
+        const labelTnow = document.getElementById('label-tnow');
+        const btnPlay = document.getElementById('btn-play');
+        const btnResetTime = document.getElementById('btn-reset-time');
+        const btnStepPrev = document.getElementById('btn-step-prev');
+        const btnStepNext = document.getElementById('btn-step-next');
+        const modePhys = document.getElementById('mode-phys');
+        const modeMath = document.getElementById('mode-math');
+        const btnBoundNone = document.getElementById('btn-bound-none');
+        const btnBoundFree = document.getElementById('btn-bound-free');
+        const btnBoundFixed = document.getElementById('btn-bound-fixed');
+        const btnPrevParticle = document.getElementById('btn-prev-particle');
+        const btnNextParticle = document.getElementById('btn-next-particle');
+        const labelParticleIdx = document.getElementById('val-particle-idx');
+        const canvasYX = document.getElementById('canvas-yx');
+        const canvasYT = document.getElementById('canvas-yt');
+        const ctxYX = canvasYX.getContext('2d');
+        const ctxYT = canvasYT.getContext('2d');
+
+        // 境界条件切り替えハンドラ
+        function setBoundaryMode(mode) {
+            params.boundary = mode;
+            const btnActive = "px-2 py-1 rounded font-bold transition bg-indigo-600 text-white";
+            const btnInactive = "px-2 py-1 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white";
+            
+            btnBoundNone.className = mode === 'none' ? btnActive : btnInactive;
+            btnBoundFree.className = mode === 'free' ? btnActive : btnInactive;
+            btnBoundFixed.className = mode === 'fixed' ? btnActive : btnInactive;
+            
+            syncUI();
+        }
+
+        btnBoundNone.addEventListener('click', () => setBoundaryMode('none'));
+        btnBoundFree.addEventListener('click', () => setBoundaryMode('free'));
+        btnBoundFixed.addEventListener('click', () => setBoundaryMode('fixed'));
+
+        sliderT.addEventListener('input', (e) => {
+            params.tNow = parseFloat(e.target.value);
+            syncUI();
+        });
+
+        btnStepPrev.addEventListener('click', () => {
+            params.tNow = Math.max(0, params.tNow - 0.05);
+            params.isPlaying = false;
+            updatePlayButtonUI();
+            syncUI();
+        });
+
+        btnStepNext.addEventListener('click', () => {
+            params.tNow = Math.min(params.tMax, params.tNow + 0.05);
+            params.isPlaying = false;
+            updatePlayButtonUI();
+            syncUI();
+        });
+
+        // 軸モード切替ハンドラ
+        modePhys.addEventListener('click', () => {
+            params.axisMode = 'A';
+            modePhys.className = "px-2.5 py-1 rounded text-xs font-bold transition bg-indigo-600 text-white";
+            modeMath.className = "px-2.5 py-1 rounded text-xs font-bold transition text-gray-400 hover:text-white";
+            rebuildAxes();
+            setCameraPreset('iso');
+            syncUI();
+        });
+
+        modeMath.addEventListener('click', () => {
+            params.axisMode = 'B';
+            modeMath.className = "px-2.5 py-1 rounded text-xs font-bold transition bg-indigo-600 text-white";
+            modePhys.className = "px-2.5 py-1 rounded text-xs font-bold transition text-gray-400 hover:text-white";
+            rebuildAxes();
+            setCameraPreset('iso');
+            syncUI();
+        });
+
+        // 再生/停止
+        btnPlay.addEventListener('click', () => {
+            params.isPlaying = !params.isPlaying;
+            params.speed = 1.0;
+            updatePlayButtonUI();
+        });
+
+        // リセットボタン
+        btnResetTime.addEventListener('click', () => {
+            params.tNow = 0.0;
+            params.isPlaying = false;
+            updatePlayButtonUI();
+            syncUI();
+        });
+
+        function updatePlayButtonUI() {
+            if (params.isPlaying) {
+                btnPlay.innerHTML = `<i class="fa-solid fa-pause"></i> <span>一時停止</span>`;
+                btnPlay.classList.replace('bg-emerald-600', 'bg-amber-600');
+                btnPlay.classList.replace('hover:bg-emerald-500', 'hover:bg-amber-500');
+            } else {
+                btnPlay.innerHTML = `<i class="fa-solid fa-play"></i> <span>再生</span>`;
+                btnPlay.classList.replace('bg-amber-600', 'bg-emerald-600');
+                btnPlay.classList.replace('hover:bg-amber-500', 'hover:bg-emerald-500');
+            }
+        }
+
+        // --- 6. 2Dサブグラフ描画 (y-x グラフ 及び y-t グラフ) ---
+        function draw2DGraphs() {
+            // 1. y-x グラフ (固定時刻 t_now における x と y)
+            const wYX = canvasYX.width;
+            const hYX = canvasYX.height;
+            ctxYX.clearRect(0, 0, wYX, hYX);
+
+            // グリッド線・軸
+            const centerYX = hYX / 2;
+            ctxYX.strokeStyle = '#374151';
+            ctxYX.lineWidth = 1;
+            ctxYX.beginPath();
+            ctxYX.moveTo(0, centerYX);
+            ctxYX.lineTo(wYX, centerYX);
+            ctxYX.stroke();
+
+            // x0 の縦点線
+            const x0Pixel = (params.x0 / params.xMax) * wYX;
+            ctxYX.strokeStyle = '#f59e0b';
+            ctxYX.setLineDash([4, 4]);
+            ctxYX.beginPath();
+            ctxYX.moveTo(x0Pixel, 0);
+            ctxYX.lineTo(x0Pixel, hYX);
+            ctxYX.stroke();
+            ctxYX.setLineDash([]);
+
+            // 正弦波曲線
+            ctxYX.strokeStyle = '#22d3ee';
+            ctxYX.lineWidth = 2 * (window.devicePixelRatio || 1);
+            ctxYX.beginPath();
+            for (let px = 0; px <= wYX; px++) {
+                const xVal = (px / wYX) * params.xMax;
+                const yVal = calcDisplacement(xVal, params.tNow);
+                const py = centerYX - (yVal / 3.0) * (centerYX * 0.8);
+                if (px === 0) ctxYX.moveTo(px, py);
+                else ctxYX.lineTo(px, py);
+            }
+            ctxYX.stroke();
+
+            // 注目位置 x0 の点
+            const yAtX0 = calcDisplacement(params.x0, params.tNow);
+            const pyAtX0 = centerYX - (yAtX0 / 3.0) * (centerYX * 0.8);
+            ctxYX.fillStyle = '#f59e0b';
+            ctxYX.beginPath();
+            ctxYX.arc(x0Pixel, pyAtX0, 5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+            ctxYX.fill();
+
+            // 右端境界の表示 (y-x グラフ)
+            ctxYX.font = `bold ${11 * (window.devicePixelRatio || 1)}px sans-serif`;
+            ctxYX.textAlign = 'right';
+            if (params.boundary === 'free') {
+                ctxYX.strokeStyle = '#38bdf8';
+                ctxYX.lineWidth = 2 * (window.devicePixelRatio || 1);
+                ctxYX.beginPath();
+                ctxYX.moveTo(wYX - 2, 0);
+                ctxYX.lineTo(wYX - 2, hYX);
+                ctxYX.stroke();
+                ctxYX.fillStyle = '#38bdf8';
+                ctxYX.fillText('自由端 ◯', wYX - 6, 16 * (window.devicePixelRatio || 1));
+            } else if (params.boundary === 'fixed') {
+                ctxYX.strokeStyle = '#ef4444';
+                ctxYX.lineWidth = 4 * (window.devicePixelRatio || 1);
+                ctxYX.beginPath();
+                ctxYX.moveTo(wYX - 2, 0);
+                ctxYX.lineTo(wYX - 2, hYX);
+                ctxYX.stroke();
+                ctxYX.fillStyle = '#ef4444';
+                ctxYX.fillText('固定端 ✖', wYX - 6, 16 * (window.devicePixelRatio || 1));
+            } else {
+                ctxYX.fillStyle = '#6b7280';
+                ctxYX.fillText('端なし ➔', wYX - 6, 16 * (window.devicePixelRatio || 1));
+            }
+
+            // 最初の山の上の進行方向矢印 (端なしの場合のみ表示)
+            const vSpeed = params.lambda / params.T;
+            const xCrest1 = vSpeed * params.tNow - 0.25 * params.lambda;
+            if (xCrest1 >= 0 && xCrest1 <= params.xMax && params.tNow >= 0.25 * params.T && params.boundary === 'none') {
+                const pxCrest = (xCrest1 / params.xMax) * wYX;
+                const pyCrest = centerYX - (params.A / 3.0) * (centerYX * 0.8) - 18 * (window.devicePixelRatio || 1);
+
+                ctxYX.fillStyle = '#ff0055';
+                ctxYX.strokeStyle = '#ff0055';
+                ctxYX.font = `bold ${10 * (window.devicePixelRatio || 1)}px sans-serif`;
+                ctxYX.textAlign = 'center';
+                ctxYX.fillText('進行方向 v', pxCrest + 18 * (window.devicePixelRatio || 1), pyCrest - 4 * (window.devicePixelRatio || 1));
+
+                // 矢印線
+                ctxYX.lineWidth = 2 * (window.devicePixelRatio || 1);
+                ctxYX.beginPath();
+                ctxYX.moveTo(pxCrest - 8 * (window.devicePixelRatio || 1), pyCrest);
+                ctxYX.lineTo(pxCrest + 22 * (window.devicePixelRatio || 1), pyCrest);
+                ctxYX.stroke();
+
+                // 矢印頭部
+                ctxYX.beginPath();
+                ctxYX.moveTo(pxCrest + 22 * (window.devicePixelRatio || 1), pyCrest - 4 * (window.devicePixelRatio || 1));
+                ctxYX.lineTo(pxCrest + 28 * (window.devicePixelRatio || 1), pyCrest);
+                ctxYX.lineTo(pxCrest + 22 * (window.devicePixelRatio || 1), pyCrest + 4 * (window.devicePixelRatio || 1));
+                ctxYX.closePath();
+                ctxYX.fill();
+            }
+
+            // 2. y-t グラフ (固定位置 x0 における t と y)
+            const wYT = canvasYT.width;
+            const hYT = canvasYT.height;
+            ctxYT.clearRect(0, 0, wYT, hYT);
+
+            // グリッド線・軸
+            const centerYT = hYT / 2;
+            ctxYT.strokeStyle = '#374151';
+            ctxYT.lineWidth = 1;
+            ctxYT.beginPath();
+            ctxYT.moveTo(0, centerYT);
+            ctxYT.lineTo(wYT, centerYT);
+            ctxYT.stroke();
+
+            // t_now の縦点線
+            const tNowPixel = (params.tNow / params.tMax) * wYT;
+            ctxYT.strokeStyle = '#22d3ee';
+            ctxYT.setLineDash([4, 4]);
+            ctxYT.beginPath();
+            ctxYT.moveTo(tNowPixel, 0);
+            ctxYT.lineTo(tNowPixel, hYT);
+            ctxYT.stroke();
+            ctxYT.setLineDash([]);
+
+            // 未来のガイド波形（薄い破線）
+            ctxYT.strokeStyle = 'rgba(245, 158, 11, 0.25)';
+            ctxYT.lineWidth = 1.5 * (window.devicePixelRatio || 1);
+            ctxYT.setLineDash([3, 3]);
+            ctxYT.beginPath();
+            for (let pt = 0; pt <= wYT; pt++) {
+                const tVal = (pt / wYT) * params.tMax;
+                const yVal = calcDisplacement(params.x0, tVal);
+                const py = centerYT - (yVal / 3.0) * (centerYT * 0.8);
+                if (pt === 0) ctxYT.moveTo(pt, py);
+                else ctxYT.lineTo(pt, py);
+            }
+            ctxYT.stroke();
+            ctxYT.setLineDash([]);
+
+            // 軌跡：0 -> t_now までの実線波形
+            const endPt = Math.floor((params.tNow / params.tMax) * wYT);
+            if (endPt > 0) {
+                ctxYT.strokeStyle = '#f59e0b';
+                ctxYT.lineWidth = 2.5 * (window.devicePixelRatio || 1);
+                ctxYT.beginPath();
+                for (let pt = 0; pt <= endPt; pt++) {
+                    const tVal = (pt / wYT) * params.tMax;
+                    const yVal = calcDisplacement(params.x0, tVal);
+                    const py = centerYT - (yVal / 3.0) * (centerYT * 0.8);
+                    if (pt === 0) ctxYT.moveTo(pt, py);
+                    else ctxYT.lineTo(pt, py);
+                }
+                ctxYT.stroke();
+            }
+
+            // 現在時刻 t_now の点
+            const yAtTNow = calcDisplacement(params.x0, params.tNow);
+            const pyAtTNow = centerYT - (yAtTNow / 3.0) * (centerYT * 0.8);
+            ctxYT.fillStyle = '#22d3ee';
+            ctxYT.beginPath();
+            ctxYT.arc(tNowPixel, pyAtTNow, 5 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+            ctxYT.fill();
+        }
+
+        // パラメータスライダー群
+        function setupSlider(id, paramKey, valLabelId, formatFn) {
+            const el = document.getElementById(id);
+            const label = document.getElementById(valLabelId);
+            el.addEventListener('input', (e) => {
+                params[paramKey] = parseFloat(e.target.value);
+                if (label) label.textContent = formatFn(params[paramKey]);
+                syncUI();
+            });
+        }
+
+        setupSlider('slider-x0', 'x0', 'val-x0', v => `${v.toFixed(2)} m`);
+        setupSlider('slider-A', 'A', 'val-A', v => `${v.toFixed(2)} m`);
+        setupSlider('slider-lambda', 'lambda', 'val-lambda', v => `${v.toFixed(2)} m`);
+        setupSlider('slider-T', 'T', 'val-T', v => `${v.toFixed(2)} s`);
+
+        // 粒子切り替え「前」「次」ボタンイベント
+        btnPrevParticle.addEventListener('click', () => {
+            const step = params.xMax / (numParticles - 1);
+            params.x0 = Math.max(0, Math.round((params.x0 - step) / step) * step);
+            syncUI();
+        });
+
+        btnNextParticle.addEventListener('click', () => {
+            const step = params.xMax / (numParticles - 1);
+            params.x0 = Math.min(params.xMax, Math.round((params.x0 + step) / step) * step);
+            syncUI();
+        });
+
+        // トグルスイッチ群
+        function setupToggle(id, paramKey) {
+            const el = document.getElementById(id);
+            el.addEventListener('change', (e) => {
+                params[paramKey] = e.target.checked;
+                syncUI();
+            });
+        }
+
+        setupToggle('chk-trail', 'trailMode');
+        setupToggle('chk-surface', 'showSurface');
+        setupToggle('chk-particles', 'showParticles');
+        setupToggle('chk-slice-yx', 'showSliceYX');
+        setupToggle('chk-slice-yt', 'showSliceYT');
+        setupToggle('chk-vectors', 'showVectors');
+        setupToggle('chk-grid', 'showGrid');
+
+        // 視点切り替えボタン
+        document.getElementById('view-iso').addEventListener('click', () => setCameraPreset('iso'));
+        document.getElementById('view-front').addEventListener('click', () => setCameraPreset('front'));
+        document.getElementById('view-side').addEventListener('click', () => setCameraPreset('side'));
+        document.getElementById('view-top').addEventListener('click', () => setCameraPreset('top'));
+        document.getElementById('btn-reset-cam').addEventListener('click', () => setCameraPreset('iso'));
+
+        // モーダル表示切替
+        const modal = document.getElementById('guide-modal');
+        document.getElementById('btn-guide-toggle').addEventListener('click', () => modal.classList.remove('hidden'));
+        document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+        document.getElementById('btn-close-modal-bottom').addEventListener('click', () => modal.classList.add('hidden'));
+
+        // UI表示の同期 update
+        function syncUI() {
+            sliderT.value = params.tNow;
+            labelTnow.textContent = `t = ${params.tNow.toFixed(2)} s`;
+
+            const sliderX0El = document.getElementById('slider-x0');
+            if (sliderX0El) sliderX0El.value = params.x0;
+            document.getElementById('val-x0').textContent = `${params.x0.toFixed(2)} m`;
+
+            const step = params.xMax / (numParticles - 1);
+            const particleIdx = Math.round(params.x0 / step) + 1;
+            if (labelParticleIdx) {
+                labelParticleIdx.textContent = `粒子 #${particleIdx}`;
+            }
+
+            // 物理量の計算と計算表示
+            const v = params.lambda / params.T;
+            const f = 1.0 / params.T;
+
+            document.getElementById('stat-v').textContent = v.toFixed(2);
+            document.getElementById('stat-f').textContent = f.toFixed(2);
+            document.getElementById('stat-lambda').textContent = params.lambda.toFixed(1);
+            document.getElementById('stat-T').textContent = params.T.toFixed(1);
+
+            update3DScene();
+            draw2DGraphs();
+
+            // MathJax 再レンダリング（存在する場合）
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise();
+            }
+        }
+
+        // --- 7. アニメーションループ ---
+        let lastTime = performance.now();
+
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            const delta = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            if (params.isPlaying) {
+                params.tNow += delta * params.speed;
+                if (params.tNow > params.tMax) {
+                    params.tNow = 0; // ループ再生
+                }
+                syncUI();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // 3Dビューポートの縦方向の高さを調整する処理（2Dグラフ2つの合計高度の2倍に拡大）
+        function adjust3DCanvasSize() {
+            const cardYX = document.getElementById('card-yx');
+            const cardYT = document.getElementById('card-yt');
+            const container3D = document.getElementById('canvas-container');
+            const leftViewport = document.getElementById('left-viewport-container');
+
+            if (cardYX && cardYT && container3D && leftViewport) {
+                // y-x グラフカードと y-t グラフカードの高さ合計の2倍に拡大
+                const totalGraphHeight = (cardYX.offsetHeight + cardYT.offsetHeight + 12) * 2;
+                
+                // 親コンテナの領域を超えない範囲で高さを調整
+                const maxHeight = leftViewport.clientHeight - 24;
+                const finalHeight = Math.min(totalGraphHeight, maxHeight);
+
+                container3D.style.height = `${finalHeight}px`;
+
+                const w = container3D.clientWidth;
+                const h = container3D.clientHeight;
+                if (w > 0 && h > 0) {
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                }
+            }
+        }
+
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            adjust3DCanvasSize();
+
+            // 2D Canvas リサイズ調整
+            const rectYX = canvasYX.getBoundingClientRect();
+            canvasYX.width = rectYX.width * window.devicePixelRatio;
+            canvasYX.height = rectYX.height * window.devicePixelRatio;
+
+            const rectYT = canvasYT.getBoundingClientRect();
+            canvasYT.width = rectYT.width * window.devicePixelRatio;
+            canvasYT.height = rectYT.height * window.devicePixelRatio;
+
+            syncUI();
+        });
+
+        // 起動時初期化
+        window.onload = () => {
+            // 初期 canvas 描画解像度合わせ
+            const rectYX = canvasYX.getBoundingClientRect();
+            canvasYX.width = rectYX.width * window.devicePixelRatio;
+            canvasYX.height = rectYX.height * window.devicePixelRatio;
+
+            const rectYT = canvasYT.getBoundingClientRect();
+            canvasYT.width = rectYT.width * window.devicePixelRatio;
+            canvasYT.height = rectYT.height * window.devicePixelRatio;
+
+            adjust3DCanvasSize();
+            syncUI();
+            animate(performance.now());
+        };
+    </script>
+</body>
+</html>

@@ -54,10 +54,10 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col">
+<body class="h-screen w-screen flex flex-col bg-[#0b0f19] overflow-auto">
 
     <!-- トップヘッダー -->
-    <header class="glass-panel h-14 px-4 flex items-center justify-between shrink-0 z-20 shadow-lg border-b border-gray-800">
+    <header class="glass-panel h-14 px-6 flex items-center justify-between shrink-0 z-20 shadow-lg border-b border-gray-800 w-full">
         <div class="flex items-center space-x-3">
             <div class="bg-indigo-600/30 p-2 rounded-lg border border-indigo-500/40 text-indigo-400">
                 <i class="fa-solid fa-cube text-lg"></i>
@@ -92,241 +92,243 @@
         </div>
     </header>
 
-    <!-- メインコンテンツ領域 -->
-    <div class="flex-1 flex flex-col overflow-hidden relative">
+    <!-- メインコンテンツ領域（画面最大化時もサイズが変化しない固定枠コンテナ） -->
+    <div class="flex-1 flex items-center justify-center p-3 overflow-auto">
+        <div class="w-[1220px] h-[660px] flex flex-col gap-3 glass-panel border border-gray-800 rounded-2xl p-3 shadow-2xl bg-slate-950/90 shrink-0">
 
-        <!-- 上段：3Dビューポート ＋ 右側2Dサブグラフ -->
-        <div class="flex-1 flex overflow-hidden relative">
-            <!-- 3D ビューポート (Three.js) -->
-            <div id="left-viewport-container" class="flex-1 relative w-full h-full bg-slate-950 flex items-center justify-center p-3">
-                <div id="canvas-container" class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border border-gray-800">
-                    <!-- 視点切り替え＆軸モード選択 (左上オーバーレイ) -->
-                    <div class="absolute top-3 left-3 z-10 flex flex-col gap-2">
-                        <!-- 視点切り替え -->
-                        <div class="flex flex-wrap gap-1.5 glass-panel p-1.5 rounded-lg shadow-md">
-                            <button id="view-iso" class="px-2.5 py-1 text-xs rounded bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition">3D斜視</button>
-                            <button id="view-front" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">正面 (<i>y</i>-<i>x</i> 瞬間波形)</button>
-                            <button id="view-side" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">側面 (<i>y</i>-<i>t</i> 媒質振動)</button>
-                            <button id="view-top" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">上面 (<i>x</i>-<i>t</i> 平面波紋)</button>
-                            <button id="btn-reset-cam" class="px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition" title="カメラリセット">
+            <!-- 上段：3Dビューポート (左) ＋ 2Dサブグラフ (右) -->
+            <div class="flex gap-3 h-[470px] shrink-0">
+                <!-- 3D ビューポート (固定幅 780px / 固定高 470px) -->
+                <div id="left-viewport-container" class="w-[780px] h-[470px] relative shrink-0">
+                    <div id="canvas-container" class="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-gray-800 relative bg-slate-950">
+                        <!-- 視点切り替え＆軸モード選択 (左上オーバーレイ) -->
+                        <div class="absolute top-3 left-3 z-10 flex flex-col gap-2">
+                            <!-- 視点切り替え -->
+                            <div class="flex flex-wrap gap-1.5 glass-panel p-1.5 rounded-lg shadow-md">
+                                <button id="view-iso" class="px-2.5 py-1 text-xs rounded bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition">3D斜視</button>
+                                <button id="view-front" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">正面 (<i>y</i>-<i>x</i> 瞬間波形)</button>
+                                <button id="view-side" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">側面 (<i>y</i>-<i>t</i> 媒質振動)</button>
+                                <button id="view-top" class="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-300 hover:bg-gray-700 transition">上面 (<i>x</i>-<i>t</i> 平面波紋)</button>
+                                <button id="btn-reset-cam" class="px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition" title="カメラリセット">
+                                    <i class="fa-solid fa-rotate-left"></i>
+                                </button>
+                            </div>
+
+                            <!-- 3軸モード切り替え（物理標準 vs 数学標準） -->
+                            <div class="glass-panel p-2 rounded-lg shadow-md flex items-center gap-2 text-xs">
+                                <span class="text-gray-400 font-bold flex items-center gap-1">
+                                    <i class="fa-solid fa-compass text-indigo-400"></i> 軸設定:
+                                </span>
+                                <div class="flex bg-gray-900/90 rounded p-0.5 border border-gray-700">
+                                    <button id="mode-phys" class="px-2.5 py-1 rounded text-xs font-bold transition bg-indigo-600 text-white">
+                                        モードA (物理: Y = 変位 <i>y</i>)
+                                    </button>
+                                    <button id="mode-math" class="px-2.5 py-1 rounded text-xs font-bold transition text-gray-400 hover:text-white">
+                                        モードB (数学: Z = 変位 <i>y</i>)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3D操作ヒント (左下) -->
+                        <div class="absolute bottom-3 left-3 z-10 text-[11px] text-gray-400 glass-panel px-3 py-1.5 rounded-lg pointer-events-none hidden sm:block">
+                            <i class="fa-solid fa-hand-pointer text-indigo-400 mr-1"></i> ドラッグ: 視点回転 | 右ドラッグ: 平行移動 | ホイール: 拡大縮小
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側 2Dサブグラフ専用パネル (固定幅 404px / 固定高 470px) -->
+                <aside class="w-[404px] h-[470px] glass-panel border border-gray-800 rounded-xl flex flex-col shrink-0 p-3 justify-between overflow-hidden bg-slate-900/60">
+                    
+                    <!-- 時間経過コントロール（右上配置） -->
+                    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-cyan-500/40 shadow-lg shrink-0">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+                                <i class="fa-solid fa-clock text-cyan-400"></i> 時間コントロール
+                            </span>
+                            <span id="label-tnow" class="font-mono text-xs font-bold text-cyan-400 bg-slate-950 px-2 py-0.5 rounded border border-cyan-500/30">t = 0.00 s</span>
+                        </div>
+                        
+                        <input id="slider-t" type="range" min="0" max="20" step="0.05" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2.5">
+
+                        <div class="grid grid-cols-5 gap-1.5">
+                            <button id="btn-step-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ戻る">
+                                <i class="fa-solid fa-backward-step"></i>
+                            </button>
+                            <button id="btn-play" class="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-1.5 rounded font-bold transition flex items-center justify-center gap-1.5 shadow">
+                                <i class="fa-solid fa-play"></i> <span>再生</span>
+                            </button>
+                            <button id="btn-step-next" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ進む">
+                                <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                            <button id="btn-reset-time" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="最初へ">
                                 <i class="fa-solid fa-rotate-left"></i>
                             </button>
                         </div>
+                    </div>
 
-                        <!-- 3軸モード切り替え（物理標準 vs 数学標準） -->
-                        <div class="glass-panel p-2 rounded-lg shadow-md flex items-center gap-2 text-xs">
-                            <span class="text-gray-400 font-bold flex items-center gap-1">
-                                <i class="fa-solid fa-compass text-indigo-400"></i> 軸設定:
-                            </span>
-                            <div class="flex bg-gray-900/90 rounded p-0.5 border border-gray-700">
-                                <button id="mode-phys" class="px-2.5 py-1 rounded text-xs font-bold transition bg-indigo-600 text-white">
-                                    モードA (物理: Y = 変位 <i>y</i>)
-                                </button>
-                                <button id="mode-math" class="px-2.5 py-1 rounded text-xs font-bold transition text-gray-400 hover:text-white">
-                                    モードB (数学: Z = 変位 <i>y</i>)
-                                </button>
+                    <div class="flex flex-col gap-2 shrink-0">
+                        <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-chart-line text-indigo-400"></i> 授業用 2D断面グラフ
+                        </h2>
+
+                        <!-- 1. y-x グラフ（写真） -->
+                        <div id="card-yx" class="bg-slate-900/90 rounded-lg p-2.5 border border-cyan-500/30 shrink-0">
+                            <div class="flex justify-between items-center mb-1.5 text-xs">
+                                <span class="font-bold text-cyan-400 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> <i>y</i> - <i>x</i> グラフ（写真）
+                                </span>
+                                <span class="text-[10px] text-gray-400">時刻 <i>t</i> = <i>t</i><sub>now</sub> での波形</span>
+                            </div>
+                            <canvas id="canvas-yx" width="360" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                            <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                                <span>横軸: 位置 <i>x</i> [m]</span>
+                                <span>縦軸: 変位 <i>y</i> [m]</span>
+                            </div>
+                        </div>
+
+                        <!-- 2. y-t グラフ（記録） -->
+                        <div id="card-yt" class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/30 shrink-0">
+                            <div class="flex justify-between items-center mb-1.5 text-xs">
+                                <span class="font-bold text-amber-400 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> <i>y</i> - <i>t</i> グラフ（記録）
+                                </span>
+                                <span class="text-[10px] text-gray-400">位置 <i>x</i> = <i>x</i><sub>0</sub> での振動</span>
+                            </div>
+                            <canvas id="canvas-yt" width="360" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
+                            <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                                <span>横軸: 時刻 <i>t</i> [s]</span>
+                                <span>縦軸: 変位 <i>y</i> [m]</span>
                             </div>
                         </div>
                     </div>
-
-                    <!-- 3D操作ヒント (左下) -->
-                    <div class="absolute bottom-3 left-3 z-10 text-[11px] text-gray-400 glass-panel px-3 py-1.5 rounded-lg pointer-events-none hidden sm:block">
-                        <i class="fa-solid fa-hand-pointer text-indigo-400 mr-1"></i> ドラッグ: 視点回転 | 右ドラッグ: 平行移動 | ホイール: 拡大縮小
-                    </div>
-                </div>
+                </aside>
             </div>
 
-            <!-- 右側 2Dサブグラフ専用パネル（y-x グラフ & y-t グラフ） -->
-            <aside class="w-80 md:w-96 glass-panel border-l border-gray-800 flex flex-col h-full z-10 overflow-hidden shrink-0 p-3 justify-between">
-                
-                <!-- 時間経過コントロール（右上配置） -->
-                <div class="bg-slate-900/90 rounded-xl p-2.5 border border-cyan-500/40 shadow-lg shrink-0">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-                            <i class="fa-solid fa-clock text-cyan-400"></i> 時間コントロール
-                        </span>
-                        <span id="label-tnow" class="font-mono text-xs font-bold text-cyan-400 bg-slate-950 px-2 py-0.5 rounded border border-cyan-500/30">t = 0.00 s</span>
-                    </div>
-                    
-                    <input id="slider-t" type="range" min="0" max="20" step="0.05" value="0" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-2.5">
+            <!-- 下段：各種設定・コントロールパラメータ（固定高 150px） -->
+            <footer class="h-[150px] glass-panel border border-gray-800 rounded-xl p-2.5 z-20 shrink-0 flex items-center justify-between bg-slate-900/40">
+                <div class="flex items-center justify-between w-full gap-4">
 
-                    <div class="grid grid-cols-5 gap-1.5">
-                        <button id="btn-step-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ戻る">
-                            <i class="fa-solid fa-backward-step"></i>
-                        </button>
-                        <button id="btn-play" class="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-1.5 rounded font-bold transition flex items-center justify-center gap-1.5 shadow">
-                            <i class="fa-solid fa-play"></i> <span>再生</span>
-                        </button>
-                        <button id="btn-step-next" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="1コマ進む">
-                            <i class="fa-solid fa-forward-step"></i>
-                        </button>
-                        <button id="btn-reset-time" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1.5 rounded transition border border-gray-700" title="最初へ">
-                            <i class="fa-solid fa-rotate-left"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-2 shrink-0">
-                    <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-chart-line text-indigo-400"></i> 授業用 2D断面グラフ
-                    </h2>
-
-                    <!-- 1. y-x グラフ（写真） -->
-                    <div id="card-yx" class="bg-slate-900/90 rounded-lg p-2.5 border border-cyan-500/30 shrink-0">
-                        <div class="flex justify-between items-center mb-1.5 text-xs">
-                            <span class="font-bold text-cyan-400 flex items-center gap-1">
-                                <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> <i>y</i> - <i>x</i> グラフ（写真）
-                            </span>
-                            <span class="text-[10px] text-gray-400">時刻 <i>t</i> = <i>t</i><sub>now</sub> での波形</span>
-                        </div>
-                        <canvas id="canvas-yx" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
-                        <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
-                            <span>横軸: 位置 <i>x</i> [m]</span>
-                            <span>縦軸: 変位 <i>y</i> [m]</span>
-                        </div>
-                    </div>
-
-                    <!-- 2. y-t グラフ（記録） -->
-                    <div id="card-yt" class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/30 shrink-0">
-                        <div class="flex justify-between items-center mb-1.5 text-xs">
-                            <span class="font-bold text-amber-400 flex items-center gap-1">
-                                <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> <i>y</i> - <i>t</i> グラフ（記録）
-                            </span>
-                            <span class="text-[10px] text-gray-400">位置 <i>x</i> = <i>x</i><sub>0</sub> での振動</span>
-                        </div>
-                        <canvas id="canvas-yt" width="340" height="90" class="w-full h-24 bg-slate-950 rounded border border-gray-800"></canvas>
-                        <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
-                            <span>横軸: 時刻 <i>t</i> [s]</span>
-                            <span>縦軸: 変位 <i>y</i> [m]</span>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-        </div>
-
-        <!-- 下段：各種設定・コントロールパラメータ（左下から右下に横並び配置） -->
-        <footer class="glass-panel border-t border-gray-800 p-2.5 z-20 shrink-0 overflow-x-auto">
-            <div class="flex items-start gap-3.5 min-w-max">
-
-                <!-- 左グループ: 注目粒子 ＆ 波のパラメータ -->
-                <div class="flex flex-col gap-2.5 w-72">
-                    <!-- 1. 注目粒子 (x0) 設定 -->
-                    <div class="bg-amber-950/20 rounded-xl p-2.5 border border-amber-500/30 flex flex-col justify-between">
-                        <div class="flex justify-between items-center text-xs mb-1">
-                            <label class="text-amber-300 font-bold flex items-center gap-1">
-                                <i class="fa-solid fa-location-dot text-amber-400"></i> 注目粒子 (<i>x</i><sub>0</sub>)
-                            </label>
-                            <div class="flex items-center gap-1">
+                    <!-- 左グループ: 注目粒子 ＆ 波のパラメータ -->
+                    <div class="flex items-center gap-3 w-1/2">
+                        <!-- 1. 注目粒子 (x0) 設定 -->
+                        <div class="bg-amber-950/20 rounded-xl p-2.5 border border-amber-500/30 flex flex-col justify-between w-1/2 h-[130px]">
+                            <div class="flex justify-between items-center text-xs">
+                                <label class="text-amber-300 font-bold flex items-center gap-1">
+                                    <i class="fa-solid fa-location-dot text-amber-400"></i> 注目粒子 (<i>x</i><sub>0</sub>)
+                                </label>
                                 <span id="val-particle-idx" class="font-mono text-[10px] text-amber-300/80 bg-amber-950/60 px-1 py-0.5 rounded border border-amber-500/30">粒子 #11</span>
+                            </div>
+                            <div class="text-right">
                                 <span id="val-x0" class="font-mono text-amber-400 font-bold text-xs">5.00 m</span>
                             </div>
-                        </div>
-                        <div class="flex items-center gap-1.5 mb-1">
-                            <button id="btn-prev-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="前の粒子へ">
-                                <i class="fa-solid fa-chevron-left"></i> 前
-                            </button>
-                            <input id="slider-x0" type="range" min="0" max="15" step="0.5" value="5" class="w-full h-1.5 bg-gray-700 rounded appearance-none cursor-pointer">
-                            <button id="btn-next-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="次の粒子へ">
-                                次 <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                        </div>
-                        <div class="text-[10px] text-gray-400 flex items-center">
-                            <span><i class="fa-solid fa-hand-pointer text-amber-400/80 mr-1"></i>3D球クリック選択可</span>
-                        </div>
-                    </div>
-
-                    <!-- 2. 波の基本要素パラメータ (A, lambda, T) -->
-                    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between space-y-1">
-                        <div class="text-xs font-bold text-gray-300 flex items-center gap-1 mb-0.5">
-                            <i class="fa-sliders text-indigo-400"></i> 波のパラメータ
-                        </div>
-                        <!-- 振幅 A -->
-                        <div class="flex items-center justify-between text-[11px] gap-2">
-                            <span class="text-gray-300 w-16 shrink-0">振幅 <i>A</i>:</span>
-                            <input id="slider-A" type="range" min="0.5" max="3.0" step="0.1" value="1.5" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
-                            <span id="val-A" class="font-mono text-indigo-400 font-bold w-12 text-right shrink-0">1.50 m</span>
-                        </div>
-                        <!-- 波長 lambda -->
-                        <div class="flex items-center justify-between text-[11px] gap-2">
-                            <span class="text-gray-300 w-16 shrink-0">波長 <i>λ</i>:</span>
-                            <input id="slider-lambda" type="range" min="2.0" max="10.0" step="0.2" value="5.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
-                            <span id="val-lambda" class="font-mono text-pink-400 font-bold w-12 text-right shrink-0">5.00 m</span>
-                        </div>
-                        <!-- 周期 T -->
-                        <div class="flex items-center justify-between text-[11px] gap-2">
-                            <span class="text-gray-300 w-16 shrink-0">周期 <i>T</i>:</span>
-                            <input id="slider-T" type="range" min="1.0" max="6.0" step="0.1" value="3.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
-                            <span id="val-T" class="font-mono text-amber-400 font-bold w-12 text-right shrink-0">3.00 s</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 右グループ: 右端の境界条件 ＆ 3D表示トグル -->
-                <div class="flex flex-col gap-2.5 w-80">
-                    <!-- 3. 右端の境界条件 -->
-                    <div class="bg-indigo-950/40 rounded-xl p-2.5 border border-indigo-500/30 flex flex-col justify-between">
-                        <label class="text-xs text-indigo-300 font-bold flex items-center gap-1">
-                            <i class="fa-solid fa-border-all"></i> 右端の境界条件
-                        </label>
-                        <div class="grid grid-cols-1 gap-1 my-1 text-xs">
-                            <div class="grid grid-cols-3 gap-1">
-                                <button id="btn-bound-none" class="px-2 py-1.5 rounded font-bold transition bg-indigo-600 text-white text-[11px]">端なし</button>
-                                <button id="btn-bound-free" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">自由端</button>
-                                <button id="btn-bound-fixed" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">固定端</button>
+                            <div class="flex items-center gap-1.5">
+                                <button id="btn-prev-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="前の粒子へ">
+                                    <i class="fa-solid fa-chevron-left"></i> 前
+                                </button>
+                                <input id="slider-x0" type="range" min="0" max="15" step="0.5" value="5" class="w-full h-1.5 bg-gray-700 rounded appearance-none cursor-pointer">
+                                <button id="btn-next-particle" class="bg-gray-800 hover:bg-gray-700 text-amber-400 text-[11px] px-2 py-0.5 rounded border border-gray-700 transition flex items-center gap-1 shrink-0" title="次の粒子へ">
+                                    次 <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="text-[10px] text-gray-400 flex items-center">
+                                <span><i class="fa-solid fa-hand-pointer text-amber-400/80 mr-1"></i>3D球直接クリック選択可</span>
                             </div>
                         </div>
-                        <span class="text-[10px] text-indigo-300/70">波の反射と重ね合わせ</span>
-                    </div>
 
-                    <!-- 4. 3D要素表示/非表示 (横3つ×縦2つ配置) -->
-                    <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between">
-                        <div class="flex items-center justify-between mb-1.5">
+                        <!-- 2. 波の基本要素パラメータ (A, lambda, T) -->
+                        <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between w-1/2 h-[130px]">
                             <div class="text-xs font-bold text-gray-300 flex items-center gap-1">
-                                <i class="fa-eye text-indigo-400"></i> 3D要素の表示 / 非表示
+                                <i class="fa-sliders text-indigo-400"></i> 波のパラメータ
+                            </div>
+                            <!-- 振幅 A -->
+                            <div class="flex items-center justify-between text-[11px] gap-2">
+                                <span class="text-gray-300 w-16 shrink-0">振幅 <i>A</i>:</span>
+                                <input id="slider-A" type="range" min="0.5" max="3.0" step="0.1" value="1.5" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                                <span id="val-A" class="font-mono text-indigo-400 font-bold w-12 text-right shrink-0">1.50 m</span>
+                            </div>
+                            <!-- 波長 lambda -->
+                            <div class="flex items-center justify-between text-[11px] gap-2">
+                                <span class="text-gray-300 w-16 shrink-0">波長 <i>λ</i>:</span>
+                                <input id="slider-lambda" type="range" min="2.0" max="10.0" step="0.2" value="5.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                                <span id="val-lambda" class="font-mono text-pink-400 font-bold w-12 text-right shrink-0">5.00 m</span>
+                            </div>
+                            <!-- 周期 T -->
+                            <div class="flex items-center justify-between text-[11px] gap-2">
+                                <span class="text-gray-300 w-16 shrink-0">周期 <i>T</i>:</span>
+                                <input id="slider-T" type="range" min="1.0" max="6.0" step="0.1" value="3.0" class="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer">
+                                <span id="val-T" class="font-mono text-amber-400 font-bold w-12 text-right shrink-0">3.00 s</span>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- t軸軌跡描画トグル -->
-                        <label class="flex items-center space-x-1.5 bg-indigo-950/60 px-2 py-1 rounded cursor-pointer border border-indigo-500/40 hover:border-indigo-400 mb-1.5 text-[11px]">
-                            <input type="checkbox" id="chk-trail" checked class="rounded text-indigo-500 focus:ring-0">
-                            <span class="text-indigo-300 font-bold flex items-center gap-1">
-                                <i class="fa-solid fa-pen-nib text-amber-400"></i> <i>t</i>軸軌跡描画 (0 → <i>t</i><sub>now</sub>)
-                            </span>
-                        </label>
+                    <!-- 右グループ: 右端の境界条件 ＆ 3D表示トグル -->
+                    <div class="flex items-center gap-3 w-1/2">
+                        <!-- 3. 右端の境界条件 -->
+                        <div class="bg-indigo-950/40 rounded-xl p-2.5 border border-indigo-500/30 flex flex-col justify-between w-5/12 h-[130px]">
+                            <label class="text-xs text-indigo-300 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-border-all"></i> 右端の境界条件
+                            </label>
+                            <div class="grid grid-cols-1 gap-1 my-1 text-xs">
+                                <div class="grid grid-cols-3 gap-1">
+                                    <button id="btn-bound-none" class="px-2 py-1.5 rounded font-bold transition bg-indigo-600 text-white text-[11px]">端なし</button>
+                                    <button id="btn-bound-free" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">自由端</button>
+                                    <button id="btn-bound-fixed" class="px-2 py-1.5 rounded font-bold transition bg-gray-800 text-gray-400 hover:text-white text-[11px]">固定端</button>
+                                </div>
+                            </div>
+                            <span class="text-[10px] text-indigo-300/70">波の反射と重ね合わせ</span>
+                        </div>
 
-                        <!-- 6つの項目：横3つ × 縦2つのグリッド配置 -->
-                        <div class="grid grid-cols-3 gap-1 text-[10px]">
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-surface" class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-gray-300 truncate">3D曲面(青)</span>
-                            </label>
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-particles" checked class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-amber-400 font-bold truncate">媒質粒子</span>
-                            </label>
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-slice-yx" checked class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-cyan-400 font-medium truncate"><i>y</i>-<i>x</i>断面</span>
+                        <!-- 4. 3D要素表示/非表示 (横3つ×縦2つ配置) -->
+                        <div class="bg-slate-900/90 rounded-xl p-2.5 border border-gray-800 flex flex-col justify-between w-7/12 h-[130px]">
+                            <div class="flex items-center justify-between">
+                                <div class="text-xs font-bold text-gray-300 flex items-center gap-1">
+                                    <i class="fa-eye text-indigo-400"></i> 3D要素の表示 / 非表示
+                                </div>
+                            </div>
+
+                            <!-- t軸軌跡描画トグル -->
+                            <label class="flex items-center space-x-1.5 bg-indigo-950/60 px-2 py-0.5 rounded cursor-pointer border border-indigo-500/40 hover:border-indigo-400 text-[10px]">
+                                <input type="checkbox" id="chk-trail" checked class="rounded text-indigo-500 focus:ring-0">
+                                <span class="text-indigo-300 font-bold flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-nib text-amber-400"></i> <i>t</i>軸軌跡描画 (0 → <i>t</i><sub>now</sub>)
+                                </span>
                             </label>
 
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-slice-yt" checked class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-amber-400 font-medium truncate"><i>y</i>-<i>t</i>軌跡</span>
-                            </label>
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-vectors" checked class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-gray-300 truncate">速度ベクトル</span>
-                            </label>
-                            <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-1 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
-                                <input type="checkbox" id="chk-grid" checked class="rounded text-indigo-500 focus:ring-0">
-                                <span class="text-gray-300 truncate">軸・グリッド</span>
-                            </label>
+                            <!-- 6つの項目：横3つ × 縦2つのグリッド配置 -->
+                            <div class="grid grid-cols-3 gap-1 text-[10px]">
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-surface" class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-gray-300 truncate">3D曲面(青)</span>
+                                </label>
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-particles" checked class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-amber-400 font-bold truncate">媒質粒子</span>
+                                </label>
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-slice-yx" checked class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-cyan-400 font-medium truncate"><i>y</i>-<i>x</i>断面</span>
+                                </label>
+
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-slice-yt" checked class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-amber-400 font-medium truncate"><i>y</i>-<i>t</i>軌跡</span>
+                                </label>
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-vectors" checked class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-gray-300 truncate">速度ベクトル</span>
+                                </label>
+                                <label class="flex items-center space-x-1 bg-gray-900/60 px-1.5 py-0.5 rounded cursor-pointer border border-gray-800 hover:border-gray-700">
+                                    <input type="checkbox" id="chk-grid" checked class="rounded text-indigo-500 focus:ring-0">
+                                    <span class="text-gray-300 truncate">軸・グリッド</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-            </div>
-        </footer>
+                </div>
+            </footer>
+        </div>
     </div>
 
     <!-- 授業解説用ポップアップガイド Modal -->

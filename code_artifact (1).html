@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>物理基礎シミュレーション：縦波と横波の対応（縦波の横波表示）</title>
+  <style>
+    /* ==========================================================================
+       ベースデザイン・カラー変数（教室プロジェクター向け高コントラスト配色）
+       ========================================================================== */
+    :root {
+      --bg-page: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --border-main: #cbd5e1;
+      --border-strong: #94a3b8;
+      --text-main: #0f172a;
+      --text-sub: #334155;
+      --text-muted: #64748b;
+
+      --primary: #1d4ed8;
+      --primary-hover: #1e40af;
+      --primary-soft: #eff6ff;
+
+      --accent-red: #dc2626;
+      --accent-red-soft: #fef2f2;
+      --accent-blue: #2563eb;
+      --accent-blue-soft: #eff6ff;
+      --accent-orange: #ea580c;
+      --accent-green: #059669;
+
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+      --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 7px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Meiryo", "Yu Gothic", system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 全体のフレックスレイアウト（1画面に美しく収まりつつ小画面ではスクロール可） */
+    .app-shell {
+      min-height: 100vh;
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 10px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ==========================================================================
+       ヘッダー領域
+       ========================================================================== */
+    .app-header {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-main);
+      border-radius: var(--radius-lg);
+      padding: 10px 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .subject-badge {
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 0.9rem;
+      padding: 4px 11px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .app-title {
+      font-size: clamp(1.1rem, 2vw, 1.48rem);
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: 0.01em;
+    }
+
+    .status-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      background: var(--bg-subtle);
+      border: 1.5px solid var(--border-main);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-sub);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .status-pill strong {
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    /* ==========================================================================
+       コントロールパネル（再生・パラメータ・表示オプション）
+       ========================================================================== */
+    .control-panel {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-main);
+      border-radius: var(--radius-lg);
+      padding: 10px 14px;
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px 16px;
+      align-items: center;
+    }
+
+    /* 1. 再生コントロールボタン群 */
+    .playback-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1.5px solid var(--border-strong);
+      background: #ffffff;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 8px 13px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.06s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: var(--bg-subtle);
+      border-color: var(--text-sub);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+      min-width: 146px;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    .btn-primary.is-paused {
+      background: #059669;
+      border-color: #059669;
+      box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-primary.is-paused:hover {
+      background: #047857;
+      border-color: #047857;
+    }
+
+    .btn-step {
+      padding: 8px 11px;
+      font-size: 0.9rem;
+    }
+
+    /* 2. スライダー群 */
+    .sliders-group {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(150px, 1fr));
+      gap: 10px 14px;
+      padding: 0 8px;
+      border-left: 1.5px solid var(--border-main);
+      border-right: 1.5px solid var(--border-main);
+    }
+
+    .slider-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-sub);
+    }
+
+    .slider-val {
+      font-weight: 800;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.92rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.12);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+      cursor: pointer;
+    }
+
+    /* 3. 表示切り替えチェックボックス群 */
+    .toggles-group {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 6px 10px;
+    }
+
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1.5px solid var(--border-main);
+      background: var(--bg-subtle);
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-main);
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .toggle-chip:hover {
+      border-color: var(--primary);
+      background: #ffffff;
+    }
+
+    .toggle-chip input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .toggle-chip.active-highlight {
+      border-color: #93c5fd;
+      background: var(--primary-soft);
+    }
+
+    .toggle-chip.active-dense {
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    /* ==========================================================================
+       メインキャンバス領域（上下2段連動シミュレーション）
+       ========================================================================== */
+    .canvas-card {
+      flex: 1;
+      min-height: 410px;
+      background: var(--bg-card);
+      border: 2px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #waveCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+    }
+
+    /* ==========================================================================
+       画面下部：ミニ解説カード（4ポイント凡例）
+       ========================================================================== */
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .legend-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-main);
+      border-radius: var(--radius-md);
+      padding: 9px 12px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .legend-icon {
+      flex-shrink: 0;
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.05rem;
+    }
+
+    .icon-right-up {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1.5px solid #fecaca;
+    }
+
+    .icon-left-down {
+      background: #fff7ed;
+      color: #ea580c;
+      border: 1.5px solid #fed7aa;
+    }
+
+    .icon-dense {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1.5px solid #f87171;
+    }
+
+    .icon-sparse {
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 1.5px solid #60a5fa;
+    }
+
+    .legend-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      line-height: 1.32;
+    }
+
+    .legend-title {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .legend-desc {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+
+    /* ==========================================================================
+       レスポンシブ調整（タブレット・ノートPC・小画面向け）
+       ========================================================================== */
+    @media (max-width: 1180px) {
+      .control-panel {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .sliders-group {
+        border-left: none;
+        border-right: none;
+        border-top: 1.5px solid var(--border-main);
+        border-bottom: 1.5px solid var(--border-main);
+        padding: 10px 0;
+      }
+
+      .toggles-group {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .toggles-group {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .sliders-group {
+        grid-template-columns: 1fr;
+      }
+
+      .legend-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .canvas-card {
+        min-height: 460px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .legend-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <div class="title-group">
+        <span class="subject-badge">高校1年 物理基礎</span>
+        <h1 class="app-title">物理基礎シミュレーション：縦波と横波の対応（縦波の横波表示）</h1>
+      </div>
+      <div class="status-pills" aria-label="波の現在値">
+        <div class="status-pill">経過時間: <strong id="timeReadout">0.00 T</strong></div>
+        <div class="status-pill">波の速さ v = fλ: <strong id="speedReadout">1.28 m/s</strong></div>
+      </div>
+    </header>
+
+    <!-- 操作コントロールバー -->
+    <section class="control-panel" aria-label="シミュレーション操作パネル">
+      <!-- 1. 再生コントロール -->
+      <div class="playback-group">
+        <button type="button" id="btnPlayPause" class="btn btn-primary" title="スペースキーでも切り替え可能">
+          <span id="playIcon">⏸</span>
+          <span id="playLabel">一時停止</span>
+        </button>
+        <button type="button" id="btnStepBack" class="btn btn-step" title="1ステップ戻す（←キー）">
+          ◀ コマ戻し
+        </button>
+        <button type="button" id="btnStepForward" class="btn btn-step" title="1ステップ進める（→キー）">
+          コマ送り ▶
+        </button>
+        <button type="button" id="btnReset" class="btn btn-step" title="初期状態に戻す（Rキー）">
+          ↺ リセット (t=0)
+        </button>
+      </div>
+
+      <!-- 2. 波形パラメータスライダー -->
+      <div class="sliders-group">
+        <div class="slider-item">
+          <div class="slider-header">
+            <label for="sliderAmp">振幅 A（変位の大きさ）</label>
+            <span class="slider-val" id="valAmp">0.16 m</span>
+          </div>
+          <input type="range" id="sliderAmp" min="0.04" max="0.20" step="0.01" value="0.16" />
+        </div>
+
+        <div class="slider-item">
+          <div class="slider-header">
+            <label for="sliderWave">波長 λ（1波長分の長さ）</label>
+            <span class="slider-val" id="valWave">3.2 m</span>
+          </div>
+          <input type="range" id="sliderWave" min="2.0" max="4.8" step="0.2" value="3.2" />
+        </div>
+
+        <div class="slider-item">
+          <div class="slider-header">
+            <label for="sliderFreq">速さ（振動数 f）</label>
+            <span class="slider-val" id="valFreq">0.40 Hz</span>
+          </div>
+          <input type="range" id="sliderFreq" min="0.10" max="1.20" step="0.05" value="0.40" />
+        </div>
+      </div>
+
+      <!-- 3. 解説用表示オプション -->
+      <div class="toggles-group">
+        <label class="toggle-chip active-highlight" id="chipParticles">
+          <input type="checkbox" id="chkHighlight" checked />
+          <span>注目粒子の強調</span>
+        </label>
+
+        <label class="toggle-chip active-highlight" id="chipGuides">
+          <input type="checkbox" id="chkGuides" checked />
+          <span>対応ガイド線の表示</span>
+        </label>
+
+        <label class="toggle-chip" id="chipDenseSparse">
+          <input type="checkbox" id="chkDenseSparse" />
+          <span>「密」「疎」のハイライト</span>
+        </label>
+
+        <label class="toggle-chip" id="chipRotation">
+          <input type="checkbox" id="chkRotation" />
+          <span>変位90°回転ガイド</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- メインキャンバス（上段：縦波 / 下段：横波表示） -->
+    <main class="canvas-card" id="canvasContainer">
+      <canvas id="waveCanvas" aria-label="縦波と横波の対応シミュレーション画面"></canvas>
+    </main>
+
+    <!-- 画面下部のミニ解説カード -->
+    <footer class="legend-grid" aria-label="縦波の横波表示のポイント解説">
+      <div class="legend-card">
+        <div class="legend-icon icon-right-up">→↑</div>
+        <div class="legend-text">
+          <div class="legend-title">右向きの変位（＋Δx）</div>
+          <div class="legend-desc">横波グラフでは<strong>上向き（山側，＋y）</strong>に表す</div>
+        </div>
+      </div>
+
+      <div class="legend-card">
+        <div class="legend-icon icon-left-down">←↓</div>
+        <div class="legend-text">
+          <div class="legend-title">左向きの変位（－Δx）</div>
+          <div class="legend-desc">横波グラフでは<strong>下向き（谷側，－y）</strong>に表す</div>
+        </div>
+      </div>
+
+      <div class="legend-card">
+        <div class="legend-icon icon-dense">密</div>
+        <div class="legend-text">
+          <div class="legend-title">「密」（最も混み合う場所）</div>
+          <div class="legend-desc">横波グラフが<strong>右下がりで x 軸と交わる点</strong></div>
+        </div>
+      </div>
+
+      <div class="legend-card">
+        <div class="legend-icon icon-sparse">疎</div>
+        <div class="legend-text">
+          <div class="legend-title">「疎」（最もまばらな場所）</div>
+          <div class="legend-desc">横波グラフが<strong>右上がりで x 軸と交わる点</strong></div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    /**
+     * 高校1年「物理基礎」授業用デモンストレーション
+     * 縦波（疎密波）と横波表示（変位 y-x グラフ）の完全連動シミュレーション
+     */
+    (function () {
+      "use strict";
+
+      // =========================================================================
+      // 1. シミュレーション状態・物理定数
+      // =========================================================================
+      const NUM_PARTICLES = 33;           // 媒質粒子の総数（0〜32番）
+      const DX_EQUILIBRIUM = 0.20;        // 隣接粒子のつり合いの間隔 [m]
+      const X_MAX = (NUM_PARTICLES - 1) * DX_EQUILIBRIUM; // 媒質の全長 = 6.40 [m]
+      const MAX_AMPLITUDE = 0.20;         // 振幅スライダーの最大値 [m]
+      const STEP_PHASE_FRACTION = 1 / 24; // 1コマ送り＝周期Tの1/24（15°ずつ、6コマでT/4）
+
+      // 注目粒子3つの配色スタイル（赤・橙・緑の高コントラスト配色）
+      const HIGHLIGHT_STYLES = [
+        { label: "P1", color: "#dc2626", soft: "rgba(220, 38, 38, 0.14)", border: "#991b1b" },
+        { label: "P2", color: "#ea580c", soft: "rgba(234, 88, 12, 0.14)", border: "#9a3412" },
+        { label: "P3", color: "#059669", soft: "rgba(5, 150, 105, 0.14)", border: "#065f46" }
+      ];
+
+      // アプリケーションの現在状態
+      const state = {
+        isPlaying: true,
+        phase: 0.0,                        // 位相 φ = t / T（周期単位）
+        amplitude: 0.16,                   // 振幅 A [m]
+        wavelength: 3.2,                   // 波長 λ [m]
+        frequency: 0.40,                   // 振動数 f [Hz]
+        showHighlight: true,               // 注目粒子の強調
+        showGuides: true,                  // 対応ガイド線の表示
+        showDenseSparse: false,            // 「密」「疎」のハイライト
+        showRotation90: false,             // 変位90°回転ガイド
+        highlightedIndices: [4, 12, 20],   // 注目粒子のインデックス（初期値：P1, P2, P3）
+        nextReplaceSlot: 0,                // クリック時に差し替えるスロット順
+        particleHitTargets: []             // クリック判定用の粒子座標リスト
+      };
+
+      // =========================================================================
+      // 2. DOM要素の取得
+      // =========================================================================
+      const canvas = document.getElementById("waveCanvas");
+      const ctx = canvas.getContext("2d");
+      const canvasContainer = document.getElementById("canvasContainer");
+
+      const timeReadout = document.getElementById("timeReadout");
+      const speedReadout = document.getElementById("speedReadout");
+
+      const btnPlayPause = document.getElementById("btnPlayPause");
+      const playIcon = document.getElementById("playIcon");
+      const playLabel = document.getElementById("playLabel");
+      const btnStepBack = document.getElementById("btnStepBack");
+      const btnStepForward = document.getElementById("btnStepForward");
+      const btnReset = document.getElementById("btnReset");
+
+      const sliderAmp = document.getElementById("sliderAmp");
+      const valAmp = document.getElementById("valAmp");
+      const sliderWave = document.getElementById("sliderWave");
+      const valWave = document.getElementById("valWave");
+      const sliderFreq = document.getElementById("sliderFreq");
+      const valFreq = document.getElementById("valFreq");
+
+      const chkHighlight = document.getElementById("chkHighlight");
+      const chkGuides = document.getElementById("chkGuides");
+      const chkDenseSparse = document.getElementById("chkDenseSparse");
+      const chkRotation = document.getElementById("chkRotation");
+
+      const chipParticles = document.getElementById("chipParticles");
+      const chipGuides = document.getElementById("chipGuides");
+      const chipDenseSparse = document.getElementById("chipDenseSparse");
+      const chipRotation = document.getElementById("chipRotation");
+
+      // =========================================================================
+      // 3. UI表示同期・イベントハンドラ
+      // =========================================================================
+      function updateReadouts() {
+        const normalizedCycles = ((state.phase % 100) + 100) % 100;
+        timeReadout.textContent = normalizedCycles.toFixed(2) + " T";
+        const speed = state.frequency * state.wavelength;
+        speedReadout.textContent = speed.toFixed(2) + " m/s";
+      }
+
+      function syncPlayButtonUI() {
+        if (state.isPlaying) {
+          playIcon.textContent = "⏸";
+          playLabel.textContent = "一時停止";
+          btnPlayPause.classList.remove("is-paused");
+        } else {
+          playIcon.textContent = "▶";
+          playLabel.textContent = "再生";
+          btnPlayPause.classList.add("is-paused");
+        }
+      }
+
+      function syncToggleChipStyles() {
+        chipParticles.classList.toggle("active-highlight", state.showHighlight);
+        chipGuides.classList.toggle("active-highlight", state.showGuides);
+        chipDenseSparse.classList.toggle("active-dense", state.showDenseSparse);
+        chipRotation.classList.toggle("active-highlight", state.showRotation90);
+      }
+
+      function togglePlayPause() {
+        state.isPlaying = !state.isPlaying;
+        syncPlayButtonUI();
+        render();
+      }
+
+      function stepPhase(deltaFraction) {
+        if (state.isPlaying) {
+          state.isPlaying = false;
+          syncPlayButtonUI();
+        }
+        state.phase = Math.round((state.phase + deltaFraction) * 2400) / 2400;
+        updateReadouts();
+        render();
+      }
+
+      function resetSimulation() {
+        state.phase = 0.0;
+        updateReadouts();
+        render();
+      }
+
+      // ボタン操作
+      btnPlayPause.addEventListener("click", togglePlayPause);
+      btnStepBack.addEventListener("click", () => stepPhase(-STEP_PHASE_FRACTION));
+      btnStepForward.addEventListener("click", () => stepPhase(STEP_PHASE_FRACTION));
+      btnReset.addEventListener("click", resetSimulation);
+
+      // スライダー操作
+      sliderAmp.addEventListener("input", (e) => {
+        state.amplitude = parseFloat(e.target.value);
+        valAmp.textContent = state.amplitude.toFixed(2) + " m";
+        render();
+      });
+
+      sliderWave.addEventListener("input", (e) => {
+        state.wavelength = parseFloat(e.target.value);
+        valWave.textContent = state.wavelength.toFixed(1) + " m";
+        updateReadouts();
+        render();
+      });
+
+      sliderFreq.addEventListener("input", (e) => {
+        state.frequency = parseFloat(e.target.value);
+        valFreq.textContent = state.frequency.toFixed(2) + " Hz";
+        updateReadouts();
+        render();
+      });
+
+      // 表示切り替えチェックボックス
+      chkHighlight.addEventListener("change", (e) => {
+        state.showHighlight = e.target.checked;
+        syncToggleChipStyles();
+        render();
+      });
+
+      chkGuides.addEventListener("change", (e) => {
+        state.showGuides = e.target.checked;
+        syncToggleChipStyles();
+        render();
+      });
+
+      chkDenseSparse.addEventListener("change", (e) => {
+        state.showDenseSparse = e.target.checked;
+        syncToggleChipStyles();
+        render();
+      });
+
+      chkRotation.addEventListener("change", (e) => {
+        state.showRotation90 = e.target.checked;
+        syncToggleChipStyles();
+        render();
+      });
+
+      // キーボードショートカット（授業中の操作向け）
+      window.addEventListener("keydown", (e) => {
+        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+          return;
+        }
+        if (e.code === "Space") {
+          e.preventDefault();
+          togglePlayPause();
+        } else if (e.code === "ArrowRight") {
+          e.preventDefault();
+          stepPhase(STEP_PHASE_FRACTION);
+        } else if (e.code === "ArrowLeft") {
+          e.preventDefault();
+          stepPhase(-STEP_PHASE_FRACTION);
+        } else if (e.key === "r" || e.key === "R") {
+          e.preventDefault();
+          resetSimulation();
+        }
+      });
+
+      // キャンバス上の粒子クリックで注目粒子を切り替え
+      canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        let closestIndex = -1;
+        let minDist = 26; // タップしやすいヒット半径 [px]
+
+        for (const target of state.particleHitTargets) {
+          const d = Math.hypot(clickX - target.x, clickY - target.y);
+          if (d < minDist) {
+            minDist = d;
+            closestIndex = target.index;
+          }
+        }
+
+        if (closestIndex !== -1) {
+          if (!state.showHighlight) {
+            state.showHighlight = true;
+            chkHighlight.checked = true;
+            syncToggleChipStyles();
+          }
+          if (!state.highlightedIndices.includes(closestIndex)) {
+            state.highlightedIndices[state.nextReplaceSlot] = closestIndex;
+            state.nextReplaceSlot = (state.nextReplaceSlot + 1) % state.highlightedIndices.length;
+            render();
+          }
+        }
+      });
+
+      // =========================================================================
+      // 4. 物理計算関数（正弦進行波 y = A sin(2π(x/λ - φ))）
+      // =========================================================================
+      function getDisplacement(x) {
+        return state.amplitude * Math.sin(2 * Math.PI * (x / state.wavelength - state.phase));
+      }
+
+      /**
+       * 現在の位相 φ における「密」「疎」の x 座標一覧を算出
+       * ・密：y = 0 かつ右下がり（cos = -1）→ x = λ * (φ + 0.5 + n)
+       * ・疎：y = 0 かつ右上がり（cos = +1）→ x = λ * (φ + n)
+       */
+      function getDenseAndSparsePositions() {
+        const dense = [];
+        const sparse = [];
+        const lambda = state.wavelength;
+        const phiMod = ((state.phase % 1) + 1) % 1;
+
+        const nMin = Math.floor(-2);
+        const nMax = Math.ceil(X_MAX / lambda) + 2;
+
+        for (let n = nMin; n <= nMax; n++) {
+          const xd = lambda * (phiMod + 0.5 + n);
+          if (xd >= 0 && xd <= X_MAX) {
+            dense.push(xd);
+          }
+          const xs = lambda * (phiMod + n);
+          if (xs >= 0 && xs <= X_MAX) {
+            sparse.push(xs);
+          }
+        }
+        return { dense, sparse };
+      }
+
+      // =========================================================================
+      // 5. Canvas リサイズ管理（ResizeObserver ループ防止対応）
+      // =========================================================================
+      let canvasWidth = 800;
+      let canvasHeight = 450;
+      let resizeRafId = null;
+
+      function resizeCanvas() {
+        const rect = canvasContainer.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvasWidth = rect.width;
+        canvasHeight = rect.height;
+
+        const targetW = Math.round(canvasWidth * dpr);
+        const targetH = Math.round(canvasHeight * dpr);
+
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        render();
+      }
+
+      function scheduleResize() {
+        if (resizeRafId !== null) return;
+        resizeRafId = requestAnimationFrame(() => {
+          resizeRafId = null;
+          resizeCanvas();
+        });
+      }
+
+      if (typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(() => {
+          scheduleResize();
+        });
+        ro.observe(canvasContainer);
+      }
+      window.addEventListener("resize", scheduleResize);
+
+      // =========================================================================
+      // 6. 描画ヘルパー関数
+      // =========================================================================
+      function fillRoundRect(x, y, w, h, r, fillStyle, strokeStyle, lineWidth) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        if (fillStyle) {
+          ctx.fillStyle = fillStyle;
+          ctx.fill();
+        }
+        if (strokeStyle) {
+          ctx.strokeStyle = strokeStyle;
+          ctx.lineWidth = lineWidth || 1.5;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawArrow(x1, y1, x2, y2, color, lineWidth, headSize) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.hypot(dx, dy);
+        if (len < 2) return;
+
+        const angle = Math.atan2(dy, dx);
+        const hs = Math.min(headSize || 9, len * 0.65);
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = lineWidth || 2.5;
+        ctx.lineCap = "round";
+
+        // 矢印の軸（先端の三角形と重ならないよう少し手前まで引く）
+        const shaftEndX = x2 - Math.cos(angle) * (hs * 0.65);
+        const shaftEndY = y2 - Math.sin(angle) * (hs * 0.65);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(shaftEndX, shaftEndY);
+        ctx.stroke();
+
+        // 矢印の先端
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(
+          x2 - hs * Math.cos(angle - Math.PI / 6),
+          y2 - hs * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          x2 - hs * Math.cos(angle + Math.PI / 6),
+          y2 - hs * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // =========================================================================
+      // 7. メイン描画ルーチン
+      // =========================================================================
+      function render() {
+        const W = canvasWidth;
+        const H = canvasHeight;
+        if (W <= 0 || H <= 0) return;
+
+        state.particleHitTargets = [];
+        ctx.clearRect(0, 0, W, H);
+
+        // 左右マージンとプロット領域
+        const padLeft = Math.max(54, Math.min(76, W * 0.055));
+        const padRight = Math.max(36, Math.min(54, W * 0.04));
+        const plotLeft = padLeft;
+        const plotRight = W - padRight;
+        const plotWidth = Math.max(120, plotRight - plotLeft);
+
+        // 物理座標 x [m] → 画面 X 座標の変換（縦波の実際の左右変位スケール）
+        const xPxPerMeter = plotWidth / X_MAX;
+        const xToPx = (x) => plotLeft + x * xPxPerMeter;
+
+        // 上下2段のレイアウト分割
+        const splitY = Math.round(H * 0.39);
+        const topCenterY = Math.round(splitY * 0.58);
+        const bottomHeight = H - splitY;
+        const bottomCenterY = Math.round(splitY + bottomHeight * 0.53);
+
+        // 下段（横波表示）の縦軸スケール：見やすさのため縦方向に大きく拡大して表示
+        const maxBottomAmpPx = Math.max(64, (bottomHeight - 92) * 0.45);
+        const yPxPerMeter = maxBottomAmpPx / MAX_AMPLITUDE;
+
+        // 粒子サイズ（画面幅に応じて視認性の高いサイズを確保しつつ重なり防止）
+        const spacingPx = DX_EQUILIBRIUM * xPxPerMeter;
+        const baseRadius = Math.max(4.5, Math.min(8.5, spacingPx * 0.25));
+        const highlightRadius = baseRadius * 1.32;
+
+        // ---------------------------------------------------------------------
+        // A. 背景・上下セクションの区切り
+        // ---------------------------------------------------------------------
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, W, splitY);
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(0, splitY, W, H - splitY);
+
+        // 上下セクションの境界線
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, splitY);
+        ctx.lineTo(W, splitY);
+        ctx.stroke();
+
+        // ---------------------------------------------------------------------
+        // B. 「密」「疎」の縦断ハイライト帯（チェックボックスON時）
+        // ---------------------------------------------------------------------
+        const { dense, sparse } = getDenseAndSparsePositions();
+
+        if (state.showDenseSparse) {
+          const bandHalfWidth = Math.max(24, state.wavelength * xPxPerMeter * 0.11);
+
+          // 「密」の赤い縦帯（中心ほど濃いグラデーション）
+          for (const xd of dense) {
+            const cx = xToPx(xd);
+            const grad = ctx.createLinearGradient(cx - bandHalfWidth, 0, cx + bandHalfWidth, 0);
+            grad.addColorStop(0, "rgba(239, 68, 68, 0.02)");
+            grad.addColorStop(0.5, "rgba(239, 68, 68, 0.24)");
+            grad.addColorStop(1, "rgba(239, 68, 68, 0.02)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - bandHalfWidth, 42, bandHalfWidth * 2, H - 64);
+
+            ctx.save();
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = "rgba(220, 38, 38, 0.85)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, 42);
+            ctx.lineTo(cx, H - 22);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 「疎」の青い縦帯（中心ほど濃いグラデーション）
+          for (const xs of sparse) {
+            const cx = xToPx(xs);
+            const grad = ctx.createLinearGradient(cx - bandHalfWidth, 0, cx + bandHalfWidth, 0);
+            grad.addColorStop(0, "rgba(37, 99, 235, 0.02)");
+            grad.addColorStop(0.5, "rgba(37, 99, 235, 0.22)");
+            grad.addColorStop(1, "rgba(37, 99, 235, 0.02)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - bandHalfWidth, 42, bandHalfWidth * 2, H - 64);
+
+            ctx.save();
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = "rgba(37, 99, 235, 0.8)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, 42);
+            ctx.lineTo(cx, H - 22);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // ---------------------------------------------------------------------
+        // C. セクション見出しバッジ＆進行方向矢印
+        // ---------------------------------------------------------------------
+        // 上段タイトル
+        fillRoundRect(14, 10, 276, 28, 7, "#eff6ff", "#93c5fd", 1.5);
+        ctx.fillStyle = "#1e3a8a";
+        ctx.font = "800 13.5px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("① 実際の縦波（媒質の左右の振動）", 24, 24.5);
+
+        // 下段タイトル
+        fillRoundRect(14, splitY + 10, 336, 28, 7, "#f0fdf4", "#86efac", 1.5);
+        ctx.fillStyle = "#065f46";
+        ctx.font = "800 13.5px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("② 横波表示（左右の変位を上下に表したグラフ）", 24, splitY + 24.5);
+
+        // 右上：波の進行方向インジケータ
+        const progArrowRight = plotRight;
+        const progArrowLeft = Math.max(310, progArrowRight - 140);
+        if (progArrowRight - progArrowLeft >= 90) {
+          ctx.fillStyle = "#334155";
+          ctx.font = "800 12.5px sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText("波の進行方向", progArrowRight, 17);
+          drawArrow(progArrowLeft, 29, progArrowRight, 29, "#1d4ed8", 2.8, 9);
+        }
+
+        // ---------------------------------------------------------------------
+        // D. 上段（縦波）の基準線・つり合い位置目盛り
+        // ---------------------------------------------------------------------
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(plotLeft - 12, topCenterY);
+        ctx.lineTo(plotRight + 14, topCenterY);
+        ctx.stroke();
+
+        // 各粒子のつり合い位置（x0）の小さな縦目盛り
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < NUM_PARTICLES; i++) {
+          const eqPx = xToPx(i * DX_EQUILIBRIUM);
+          ctx.beginPath();
+          ctx.moveTo(eqPx, topCenterY - 6);
+          ctx.lineTo(eqPx, topCenterY + 6);
+          ctx.stroke();
+        }
+
+        // ---------------------------------------------------------------------
+        // E. 下段（横波表示）の x軸・y軸・振幅ガイド線
+        // ---------------------------------------------------------------------
+        const ampPx = state.amplitude * yPxPerMeter;
+
+        // +A / -A の薄い水平補助線
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(plotLeft, bottomCenterY - ampPx);
+        ctx.lineTo(plotRight, bottomCenterY - ampPx);
+        ctx.moveTo(plotLeft, bottomCenterY + ampPx);
+        ctx.lineTo(plotRight, bottomCenterY + ampPx);
+        ctx.stroke();
+        ctx.restore();
+
+        // x軸（変位 y = 0 の基準線）
+        drawArrow(plotLeft - 12, bottomCenterY, plotRight + 22, bottomCenterY, "#475569", 2, 8);
+        ctx.fillStyle = "#334155";
+        ctx.font = "800 13px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("x", plotRight + 26, bottomCenterY);
+
+        // y軸（左端の変位軸）
+        const yAxisTop = splitY + 46;
+        const yAxisBottom = H - 18;
+        drawArrow(plotLeft, yAxisBottom, plotLeft, yAxisTop, "#475569", 2, 8);
+        ctx.textAlign = "center";
+        ctx.fillText("y（変位）", plotLeft, yAxisTop - 10);
+
+        // y軸ラベル（+A / 0 / -A）
+        ctx.font = "800 12px sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#dc2626";
+        ctx.fillText("+A（右変位）", plotLeft - 7, bottomCenterY - ampPx);
+        ctx.fillStyle = "#475569";
+        ctx.fillText("0", plotLeft - 8, bottomCenterY);
+        ctx.fillStyle = "#ea580c";
+        ctx.fillText("-A（左変位）", plotLeft - 7, bottomCenterY + ampPx);
+
+        // ---------------------------------------------------------------------
+        // F. 下段の正弦波曲線 y(x) の描画
+        // ---------------------------------------------------------------------
+        // 曲線とx軸の間の淡い塗りつぶし
+        ctx.beginPath();
+        ctx.moveTo(xToPx(0), bottomCenterY);
+        const curveSamples = 260;
+        for (let s = 0; s <= curveSamples; s++) {
+          const x = (s / curveSamples) * X_MAX;
+          const y = getDisplacement(x);
+          const px = xToPx(x);
+          const py = bottomCenterY - y * yPxPerMeter; // 上向きが正の変位（拡大スケール）
+          ctx.lineTo(px, py);
+        }
+        ctx.lineTo(xToPx(X_MAX), bottomCenterY);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(37, 99, 235, 0.09)";
+        ctx.fill();
+
+        // 正弦波の本線
+        ctx.beginPath();
+        for (let s = 0; s <= curveSamples; s++) {
+          const x = (s / curveSamples) * X_MAX;
+          const y = getDisplacement(x);
+          const px = xToPx(x);
+          const py = bottomCenterY - y * yPxPerMeter;
+          if (s === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = "#2563eb";
+        ctx.lineWidth = 3.4;
+        ctx.stroke();
+
+        // ---------------------------------------------------------------------
+        // G. 注目粒子の対応ガイド線（つり合い位置・変位対応）
+        // ---------------------------------------------------------------------
+        if (state.showHighlight && state.showGuides) {
+          state.highlightedIndices.forEach((idx, slot) => {
+            const style = HIGHLIGHT_STYLES[slot];
+            const x0 = idx * DX_EQUILIBRIUM;
+            const yDisp = getDisplacement(x0);
+            const eqPx = xToPx(x0);
+            const longPx = xToPx(x0 + yDisp);
+            const transPy = bottomCenterY - yDisp * yPxPerMeter;
+
+            ctx.save();
+            // つり合い位置 x0 を上下に結ぶ縦の破線
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = style.color;
+            ctx.globalAlpha = 0.65;
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(eqPx, topCenterY);
+            ctx.lineTo(eqPx, transPy);
+            ctx.stroke();
+
+            // 実際の縦波粒子位置と横波の点を結ぶ補助線（変位が大きいとき）
+            if (Math.abs(longPx - eqPx) > 4) {
+              ctx.globalAlpha = 0.28;
+              ctx.setLineDash([2, 3]);
+              ctx.beginPath();
+              ctx.moveTo(longPx, topCenterY);
+              ctx.lineTo(eqPx, transPy);
+              ctx.stroke();
+            }
+            ctx.restore();
+          });
+        }
+
+        // ---------------------------------------------------------------------
+        // H. 変位90°回転ガイド（オーバーレイ表示オプション）
+        // ---------------------------------------------------------------------
+        if (state.showHighlight && state.showRotation90) {
+          state.highlightedIndices.forEach((idx, slot) => {
+            const style = HIGHLIGHT_STYLES[slot];
+            const x0 = idx * DX_EQUILIBRIUM;
+            const yDisp = getDisplacement(x0);
+            const eqPx = xToPx(x0);
+            const dispPx = yDisp * xPxPerMeter;
+            const absDispPx = Math.abs(dispPx);
+
+            if (absDispPx < 6) return; // 変位がほぼ0のときは回転弧を省略
+
+            ctx.save();
+            // 右変位（yDisp > 0）：0°（右）→ -90°（上）へ反時計回り回転
+            // 左変位（yDisp < 0）：180°（左）→ +90°（下）へ反時計回り回転
+            const startAngle = yDisp > 0 ? 0 : Math.PI;
+            const endAngle = yDisp > 0 ? -Math.PI / 2 : Math.PI / 2;
+
+            ctx.strokeStyle = style.color;
+            ctx.lineWidth = 2.2;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.arc(eqPx, topCenterY, absDispPx, startAngle, endAngle, true);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 回転先の垂直矢印（上段にも仮の垂直変位を表示して90°回転を直感化）
+            const rotEndY = topCenterY - dispPx;
+            drawArrow(eqPx, topCenterY, eqPx, rotEndY, style.color, 2.2, 7);
+
+            // 「90°」ラベル
+            const midAngle = (startAngle + endAngle) / 2;
+            const labelR = absDispPx + 13;
+            const lx = eqPx + Math.cos(midAngle) * labelR;
+            const ly = topCenterY + Math.sin(midAngle) * labelR;
+            ctx.fillStyle = style.color;
+            ctx.font = "800 11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("90°", lx, ly);
+            ctx.restore();
+          });
+        }
+
+        // ---------------------------------------------------------------------
+        // I. 媒質粒子の描画（上段：縦波 / 下段：横波上の対応点）
+        // ---------------------------------------------------------------------
+        // 1. まず通常粒子を描画
+        for (let i = 0; i < NUM_PARTICLES; i++) {
+          const highlightSlot = state.showHighlight ? state.highlightedIndices.indexOf(i) : -1;
+          const x0 = i * DX_EQUILIBRIUM;
+          const yDisp = getDisplacement(x0);
+
+          const longPx = xToPx(x0 + yDisp);
+          const transPx = xToPx(x0);
+          const transPy = bottomCenterY - yDisp * yPxPerMeter;
+
+          // ヒットターゲット登録
+          state.particleHitTargets.push({ index: i, x: longPx, y: topCenterY });
+          state.particleHitTargets.push({ index: i, x: transPx, y: transPy });
+
+          if (highlightSlot !== -1) continue; // 注目粒子は後で最前面に描画
+
+          // 「密」「疎」ハイライトON時は、粒子の疎密状態（cos位相）に応じて色分け
+          let longFill = "#334155";
+          let transFill = "#1d4ed8";
+          let particleRadius = baseRadius;
+
+          if (state.showDenseSparse) {
+            // cos(2π(x/λ - φ)) が -1 に近いほど「密」、+1 に近いほど「疎」
+            const cosVal = Math.cos(2 * Math.PI * (x0 / state.wavelength - state.phase));
+            if (cosVal < -0.55) {
+              longFill = "#dc2626";   // 密の粒子：赤
+              transFill = "#dc2626";
+              particleRadius = baseRadius * 1.12;
+            } else if (cosVal > 0.55) {
+              longFill = "#2563eb";   // 疎の粒子：青
+              transFill = "#0284c7";
+              particleRadius = baseRadius * 1.05;
+            } else {
+              longFill = "#64748b";
+              transFill = "#64748b";
+            }
+          }
+
+          // 上段（縦波）の通常粒子
+          ctx.beginPath();
+          ctx.arc(longPx, topCenterY, particleRadius, 0, Math.PI * 2);
+          ctx.fillStyle = longFill;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "#ffffff";
+          ctx.stroke();
+
+          // 下段（横波表示）の通常粒子
+          ctx.beginPath();
+          ctx.arc(transPx, transPy, particleRadius * 0.85, 0, Math.PI * 2);
+          ctx.fillStyle = transFill;
+          ctx.fill();
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = "#ffffff";
+          ctx.stroke();
+        }
+
+        // 2. 注目粒子の強調描画（粒子本体・変位ベクトル矢印・ラベル）
+        if (state.showHighlight) {
+          state.highlightedIndices.forEach((idx, slot) => {
+            const style = HIGHLIGHT_STYLES[slot];
+            const x0 = idx * DX_EQUILIBRIUM;
+            const yDisp = getDisplacement(x0);
+
+            const eqPx = xToPx(x0);
+            const longPx = xToPx(x0 + yDisp);
+            const transPx = eqPx;
+            const transPy = bottomCenterY - yDisp * yPxPerMeter;
+
+            // 上段：つり合い位置マーカー（×印）
+            ctx.save();
+            ctx.strokeStyle = style.color;
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(eqPx - 4, topCenterY - 4);
+            ctx.lineTo(eqPx + 4, topCenterY + 4);
+            ctx.moveTo(eqPx + 4, topCenterY - 4);
+            ctx.lineTo(eqPx - 4, topCenterY + 4);
+            ctx.stroke();
+            ctx.restore();
+
+            // 上段：水平変位ベクトル矢印（eqPx → longPx）
+            if (Math.abs(longPx - eqPx) > 4) {
+              drawArrow(eqPx, topCenterY - 19, longPx, topCenterY - 19, style.color, 3.2, 9);
+            }
+
+            // 下段：垂直変位ベクトル矢印（bottomCenterY → transPy）
+            if (Math.abs(transPy - bottomCenterY) > 4) {
+              drawArrow(transPx, bottomCenterY, transPx, transPy, style.color, 3.2, 9);
+            }
+
+            // 上段：注目粒子本体
+            ctx.beginPath();
+            ctx.arc(longPx, topCenterY, highlightRadius + 4, 0, Math.PI * 2);
+            ctx.fillStyle = style.soft;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(longPx, topCenterY, highlightRadius, 0, Math.PI * 2);
+            ctx.fillStyle = style.color;
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+
+            // 上段：粒子ラベルバッジ（P1 / P2 / P3）
+            fillRoundRect(longPx - 15, topCenterY + highlightRadius + 6, 30, 20, 5, style.color, "#ffffff", 1.5);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "800 11.5px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(style.label, longPx, topCenterY + highlightRadius + 16);
+
+            // 下段：注目粒子本体
+            ctx.beginPath();
+            ctx.arc(transPx, transPy, highlightRadius + 4, 0, Math.PI * 2);
+            ctx.fillStyle = style.soft;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(transPx, transPy, highlightRadius * 0.94, 0, Math.PI * 2);
+            ctx.fillStyle = style.color;
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+
+            // 下段：粒子ラベルバッジ（山の時は上、谷の時は下に配置）
+            const labelOffsetY = yDisp >= 0 ? -(highlightRadius + 18) : (highlightRadius + 18);
+            fillRoundRect(transPx - 15, transPy + labelOffsetY - 10, 30, 20, 5, style.color, "#ffffff", 1.5);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "800 11.5px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(style.label, transPx, transPy + labelOffsetY);
+          });
+        }
+
+        // ---------------------------------------------------------------------
+        // J. 「密」「疎」のバッジ＆傾きガイド描画（ON時・最前面）
+        // ---------------------------------------------------------------------
+        if (state.showDenseSparse) {
+          // 「密」のバッジと右下がり接線ガイド
+          for (const xd of dense) {
+            const cx = xToPx(xd);
+            if (cx < plotLeft - 5 || cx > plotRight + 5) continue;
+
+            // 上段（縦波の密集部の上）に「密」バッジ
+            const badgeTopY = Math.max(44, topCenterY - 52);
+            fillRoundRect(cx - 20, badgeTopY, 40, 24, 6, "#dc2626", "#ffffff", 1.8);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "900 14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("密", cx, badgeTopY + 12);
+
+            // 下段（横波の右下がり交点）に接線セグメント・交点丸・「密（右下がり）」ラベル
+            ctx.save();
+            ctx.strokeStyle = "#dc2626";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 22, bottomCenterY - 30);
+            ctx.lineTo(cx + 22, bottomCenterY + 30);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(cx, bottomCenterY, 7, 0, Math.PI * 2);
+            ctx.fillStyle = "#dc2626";
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+
+            fillRoundRect(cx - 46, bottomCenterY - 54, 92, 23, 6, "#fef2f2", "#dc2626", 1.8);
+            ctx.fillStyle = "#b91c1c";
+            ctx.font = "800 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("密（右下がり）", cx, bottomCenterY - 42.5);
+          }
+
+          // 「疎」のバッジと右上がり接線ガイド
+          for (const xs of sparse) {
+            const cx = xToPx(xs);
+            if (cx < plotLeft - 5 || cx > plotRight + 5) continue;
+
+            // 上段（縦波のまばらな部分の上）に「疎」バッジ
+            const badgeTopY = Math.max(44, topCenterY - 52);
+            fillRoundRect(cx - 20, badgeTopY, 40, 24, 6, "#2563eb", "#ffffff", 1.8);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "900 14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("疎", cx, badgeTopY + 12);
+
+            // 下段（横波の右上がり交点）に接線セグメント・交点丸・「疎（右上がり）」ラベル
+            ctx.save();
+            ctx.strokeStyle = "#2563eb";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx - 22, bottomCenterY + 30);
+            ctx.lineTo(cx + 22, bottomCenterY - 30);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(cx, bottomCenterY, 7, 0, Math.PI * 2);
+            ctx.fillStyle = "#2563eb";
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+
+            fillRoundRect(cx - 46, bottomCenterY + 31, 92, 23, 6, "#eff6ff", "#2563eb", 1.8);
+            ctx.fillStyle = "#1d4ed8";
+            ctx.font = "800 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("疎（右上がり）", cx, bottomCenterY + 42.5);
+          }
+        }
+      }
+
+      // =========================================================================
+      // 8. アニメーションループ
+      // =========================================================================
+      let lastTimestamp = null;
+
+      function animate(timestamp) {
+        if (lastTimestamp === null) {
+          lastTimestamp = timestamp;
+        }
+        const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.05);
+        lastTimestamp = timestamp;
+
+        if (state.isPlaying) {
+          state.phase += state.frequency * dt;
+          updateReadouts();
+          render();
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      // 初期化実行
+      window.addEventListener("DOMContentLoaded", () => {
+        updateReadouts();
+        syncPlayButtonUI();
+        syncToggleChipStyles();
+        resizeCanvas();
+        requestAnimationFrame(animate);
+      });
+    })();
+  </script>
+</body>
+</html>

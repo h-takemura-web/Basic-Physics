@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>等速円運動と単振動の連動シミュレーション</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans JP', "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* 数式表示用のセリフ体フォント */
+    .math-font {
+      font-family: "Times New Roman", "Cambria Math", Georgia, serif;
+    }
+
+    /* 擬似全画面モード（iframeプレビュー環境用フォールバック） */
+    .pseudo-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 50 !important;
+      background-color: #f1f5f9 !important;
+      padding: 1rem !important;
+      overflow-y: auto !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
+      max-width: none !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+
+    /* カスタムレンジスライダーの操作性向上 */
+    input[type="range"] {
+      height: 6px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center justify-center p-2 sm:p-4">
+
+  <!-- メインコンテナ -->
+  <div id="appContainer" class="w-full max-w-6xl flex flex-col gap-3">
+    
+    <!-- 図解キャンバス枠（教科書図解を再現したアスペクト比 2:1 の白背景・枠付きエリア） -->
+    <div id="canvasWrapper" class="relative w-full aspect-[2/1] bg-white border-2 border-slate-400 rounded-xl shadow-sm overflow-hidden cursor-grab active:cursor-grabbing">
+      <canvas id="simCanvas" class="block w-full h-full"></canvas>
+      <!-- キャンバス直接ドラッグ操作の控えめなガイド -->
+      <div class="hidden sm:block absolute bottom-2 right-3 text-[11px] text-slate-400 pointer-events-none">
+        ※ 円周やグラフ上の点を直接ドラッグしても角度 θ を動かせます
+      </div>
+    </div>
+
+    <!-- 授業用コントロールパネル -->
+    <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm flex flex-col gap-3">
+      
+      <!-- 上段：再生制御・角度スライダー・リアルタイム数値表示 -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        
+        <!-- 再生・リセット・1°コマ送りボタングループ -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <button id="playPauseBtn" type="button" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-sm shadow-xs transition min-w-[116px] flex items-center justify-center gap-1.5">
+            <span>⏸</span><span>一時停止</span>
+          </button>
+          <button id="resetBtn" type="button" class="px-3 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-300 text-slate-700 font-medium text-sm transition">
+            ↺ リセット (0°)
+          </button>
+          <div class="inline-flex rounded-lg shadow-xs" role="group">
+            <button id="stepBackBtn" type="button" title="1°戻す (←キー)" class="px-2.5 py-2 rounded-l-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-300 text-slate-700 font-medium text-sm transition">
+              ◀ -1°
+            </button>
+            <button id="stepFwdBtn" type="button" title="1°進める (→キー)" class="px-2.5 py-2 rounded-r-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border-t border-b border-r border-slate-300 text-slate-700 font-medium text-sm transition">
+              +1° ▶
+            </button>
+          </div>
+        </div>
+
+        <!-- 角度 θ スライダー -->
+        <div class="flex items-center gap-2.5 flex-1 min-w-[210px] px-1">
+          <label for="angleSlider" class="text-sm font-semibold text-slate-700 whitespace-nowrap">
+            角度 <span class="math-font italic text-base">θ</span> :
+          </label>
+          <input id="angleSlider" type="range" min="0" max="360" step="1" value="45" class="w-full accent-blue-600 bg-slate-200">
+        </div>
+
+        <!-- 現在の角度 θ と変位 y のリアルタイム数値表示 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-1.5 math-font flex items-center gap-4 text-base sm:text-lg whitespace-nowrap">
+          <div>
+            <span class="italic">θ</span> = <span id="thetaDisp" class="font-bold text-slate-900">45°</span>
+          </div>
+          <div class="h-4 w-px bg-slate-300"></div>
+          <div>
+            <span class="italic">y</span> = <span id="yDisp" class="font-bold text-slate-900">0.71 r  (√2/2 r)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 下段：有名角ワンクリックジャンプ・速度切替・表示オプション・全画面 -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        
+        <!-- 有名角ワンクリックジャンプボタン -->
+        <div id="presetButtons" class="flex flex-wrap items-center gap-1">
+          <span class="text-xs font-medium text-slate-500 mr-1">有名角:</span>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="0">0°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="30">30°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="45">45°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="60">60°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="90">90°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="120">120°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="150">150°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="180">180°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="270">270°</button>
+          <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="360">360°</button>
+        </div>
+
+        <!-- 速度・表示オプション・全画面ボタン -->
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-700">
+            <span>速度:</span>
+            <select id="speedSelect" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs sm:text-sm text-slate-700 focus:outline-none focus:border-blue-500">
+              <option value="18">ゆっくり (0.5×)</option>
+              <option value="36" selected>標準 (1.0×)</option>
+              <option value="72">速い (2.0×)</option>
+            </select>
+          </label>
+
+          <label class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-700 cursor-pointer">
+            <input id="colorHighlight" type="checkbox" class="rounded accent-blue-600 w-4 h-4 cursor-pointer">
+            <span>授業用カラー強調</span>
+          </label>
+
+          <label class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-700 cursor-pointer">
+            <input id="traceMode" type="checkbox" class="rounded accent-blue-600 w-4 h-4 cursor-pointer">
+            <span>軌跡を描画</span>
+          </label>
+
+          <button id="fullscreenBtn" type="button" class="px-2.5 py-1 rounded-md border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs sm:text-sm font-medium text-slate-700 transition">
+            ⛶ 全画面
+          </button>
+        </div>
+      </div>
+
+      <!-- 操作ヒント -->
+      <div class="text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
+        <span>操作ヒント：［Space］キーで再生／一時停止、［←］［→］キーで 1° ずつ微調整できます。</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // DOM要素の取得
+      const appContainer = document.getElementById('appContainer');
+      const canvasWrapper = document.getElementById('canvasWrapper');
+      const canvas = document.getElementById('simCanvas');
+      const ctx = canvas.getContext('2d');
+
+      const playPauseBtn = document.getElementById('playPauseBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const stepBackBtn = document.getElementById('stepBackBtn');
+      const stepFwdBtn = document.getElementById('stepFwdBtn');
+      const angleSlider = document.getElementById('angleSlider');
+      const thetaDisp = document.getElementById('thetaDisp');
+      const yDisp = document.getElementById('yDisp');
+      const speedSelect = document.getElementById('speedSelect');
+      const colorHighlightChk = document.getElementById('colorHighlight');
+      const traceModeChk = document.getElementById('traceMode');
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      const presetBtns = document.querySelectorAll('.angle-btn');
+
+      // シミュレーション状態変数
+      let thetaDeg = 45;          // 初期角度（添付図解と同じ約45°）
+      let isPlaying = true;       // 再生状態
+      let degPerSec = 36;         // 角速度 [deg/s]（標準: 10秒で1周）
+      let lastTimestamp = null;   // 前フレームのタイムスタンプ
+      let isDragging = false;     // キャンバス上のドラッグ操作中フラグ
+      let dragTarget = null;      // 'circle' または 'graph'
+
+      // 最新の座標レイアウト情報（ドラッグ判定用）
+      let layout = {
+        W: 1200,
+        H: 600,
+        cx: 180,
+        cy: 320,
+        R: 130,
+        axisY2: 620,
+        w360: 458
+      };
+
+      // 有名角における厳密表現（高校1年「物理基礎」・三角比の確認用）
+      const exactLabels = {
+        0: "0",
+        30: "0.50 r  (1/2 r)",
+        45: "0.71 r  (√2/2 r)",
+        60: "0.87 r  (√3/2 r)",
+        90: "+1.00 r",
+        120: "0.87 r  (√3/2 r)",
+        135: "0.71 r  (√2/2 r)",
+        150: "0.50 r  (1/2 r)",
+        180: "0",
+        210: "-0.50 r  (-1/2 r)",
+        225: "-0.71 r  (-√2/2 r)",
+        240: "-0.87 r  (-√3/2 r)",
+        270: "-1.00 r",
+        300: "-0.87 r  (-√3/2 r)",
+        315: "-0.71 r  (-√2/2 r)",
+        330: "-0.50 r  (-1/2 r)",
+        360: "0"
+      };
+
+      /**
+       * 高DPIディスプレイに対応したキャンバスリサイズ処理
+       */
+      function resizeCanvas() {
+        try {
+          const rect = canvasWrapper.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = Math.round(rect.width * dpr);
+          canvas.height = Math.round(rect.height * dpr);
+          draw();
+        } catch (err) {
+          console.error('Canvas resize error:', err);
+        }
+      }
+
+      /**
+       * 矢印付きの直線を描画するヘルパー関数
+       */
+      function drawArrow(x1, y1, x2, y2, headLen, color) {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(
+          x2 - headLen * Math.cos(angle - Math.PI / 7),
+          y2 - headLen * Math.sin(angle - Math.PI / 7)
+        );
+        ctx.lineTo(
+          x2 - headLen * Math.cos(angle + Math.PI / 7),
+          y2 - headLen * Math.sin(angle + Math.PI / 7)
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      /**
+       * 教科書風の数式・記号（セリフ体イタリック）を描画するヘルパー関数
+       */
+      function drawMathText(text, x, y, size, align, baseline, color, withBg) {
+        ctx.save();
+        ctx.font = `italic ${size}px "Times New Roman", "Cambria Math", Georgia, serif`;
+        ctx.textAlign = align || 'center';
+        ctx.textBaseline = baseline || 'middle';
+
+        if (withBg) {
+          const metrics = ctx.measureText(text);
+          const padX = 4;
+          const padY = 2;
+          let bx = x;
+          if (align === 'center') bx = x - metrics.width / 2;
+          else if (align === 'right') bx = x - metrics.width;
+          let by = y - size / 2;
+          if (baseline === 'top') by = y;
+          else if (baseline === 'bottom') by = y - size;
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+          ctx.fillRect(bx - padX, by - padY, metrics.width + padX * 2, size + padY * 2);
+        }
+
+        ctx.fillStyle = color || '#111111';
+        ctx.fillText(text, x, y);
+        ctx.restore();
+      }
+
+      /**
+       * メイン描画関数：添付図解「等速円運動と単振動」のレイアウト・記号・補助線を再現
+       */
+      function draw() {
+        const W = canvas.width;
+        const H = canvas.height;
+        if (W === 0 || H === 0) return;
+
+        // 1200x600 を基準としたスケーリング係数
+        const scale = W / 1200;
+
+        // 背景を白でクリア
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+
+        const isColor = colorHighlightChk.checked;
+        const isTrace = traceModeChk.checked;
+
+        // 配色設定（通常時は添付図解のモノクロ印刷スタイル、カラー強調時は赤・青で視認性向上）
+        const axisColor = '#111111';
+        const guideColor = '#555555';
+        const curveColor = '#111111';
+        const dotColor = isColor ? '#dc2626' : '#111111';       // 赤または黒
+        const linkLineColor = isColor ? '#dc2626' : '#444444';  // 連動水平破線
+        const ySegColor = isColor ? '#dc2626' : '#222222';      // 変位 y
+        const thetaColor = isColor ? '#2563eb' : '#111111';     // 角度 θ
+
+        // 添付図解の幾何配置比率
+        const cy = H * 0.535;            // 水平基準軸（x軸 / θ軸）のY座標
+        const R = H * 0.215;             // 円の半径 r
+        const cx = W * 0.148;            // 円の中心 X座標
+        const axisY1 = W * 0.372;        // 中央の単振動 y軸 X座標
+        const axisY2 = W * 0.516;        // 右のグラフの y軸 X座標（原点O）
+        const w360 = W * 0.382;          // θ = 0° 〜 360° の横幅
+        const thetaAxisEnd = W * 0.960;  // θ軸の矢印先端
+        const leftEdge = W * 0.032;      // 水平軸・破線の左端
+        const rightGuideEnd = W * 0.965; // 上下破線（r, -r）の右端
+
+        // ドラッグ操作判定用に座標を保存
+        layout = { W, H, cx, cy, R, axisY2, w360 };
+
+        const rad = (thetaDeg * Math.PI) / 180;
+        const cosT = Math.cos(rad);
+        const sinT = Math.sin(rad);
+
+        // 3つの動点の座標計算
+        const p1x = cx + R * cosT;                        // 左：円周上の動点
+        const p1y = cy - R * sinT;
+        const p2x = axisY1;                               // 中央：縦軸上の単振動の動点
+        const p2y = p1y;
+        const p3x = axisY2 + (thetaDeg / 360) * w360;     // 右：正弦波グラフ上の動点
+        const p3y = p1y;
+
+        // ------------------------------------------------------------
+        // 1. 見出し（「等速円運動」「単振動」）
+        // ------------------------------------------------------------
+        ctx.save();
+        ctx.fillStyle = '#111111';
+        ctx.font = `500 ${Math.round(28 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('等速円運動', cx, H * 0.13);
+        ctx.fillText('単振動', W * 0.525, H * 0.13);
+        ctx.restore();
+
+        // ------------------------------------------------------------
+        // 2. 上限 (y = r) と下限 (y = -r) の水平破線
+        // ------------------------------------------------------------
+        ctx.save();
+        ctx.strokeStyle = guideColor;
+        ctx.lineWidth = 1.4 * scale;
+        ctx.setLineDash([7 * scale, 7 * scale]);
+
+        // 上限 y = r
+        ctx.beginPath();
+        ctx.moveTo(leftEdge, cy - R);
+        ctx.lineTo(rightGuideEnd, cy - R);
+        ctx.stroke();
+
+        // 下限 y = -r
+        ctx.beginPath();
+        ctx.moveTo(leftEdge, cy + R);
+        ctx.lineTo(rightGuideEnd, cy + R);
+        ctx.stroke();
+        ctx.restore();
+
+        // ------------------------------------------------------------
+        // 3. 基準の水平軸（左の円中心から右端の θ軸矢印まで貫通）
+        // ------------------------------------------------------------
+        ctx.lineWidth = 1.8 * scale;
+        drawArrow(leftEdge, cy, thetaAxisEnd, cy, 11 * scale, axisColor);
+        drawMathText('θ', thetaAxisEnd + 16 * scale, cy + 16 * scale, 24 * scale, 'center', 'middle', thetaColor, false);
+
+        // ------------------------------------------------------------
+        // 4. 左エリア：等速円運動
+        // ------------------------------------------------------------
+        // 円周
+        ctx.save();
+        ctx.strokeStyle = axisColor;
+        ctx.lineWidth = 2.4 * scale;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // 中心点
+        ctx.save();
+        ctx.fillStyle = axisColor;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 角度 θ の扇形と円弧
+        if (thetaDeg > 0.5) {
+          const arcR = R * 0.25;
+          ctx.save();
+          if (isColor) {
+            ctx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, arcR, 0, -rad, true);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.strokeStyle = thetaColor;
+          ctx.lineWidth = 1.7 * scale;
+          ctx.beginPath();
+          ctx.arc(cx, cy, arcR, 0, -rad, true);
+          ctx.stroke();
+          ctx.restore();
+
+          // 角度ラベル θ
+          const labelRad = Math.min(rad / 2, (35 * Math.PI) / 180);
+          const tx = cx + (arcR + 15 * scale) * Math.cos(labelRad);
+          const ty = cy - (arcR + 15 * scale) * Math.sin(labelRad);
+          drawMathText('θ', tx, ty, 22 * scale, 'center', 'middle', thetaColor, false);
+        }
+
+        // 中心から動点 P1 を結ぶ半径 r
+        ctx.save();
+        ctx.strokeStyle = axisColor;
+        ctx.lineWidth = 2.2 * scale;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(p1x, p1y);
+        ctx.stroke();
+        ctx.restore();
+
+        // 半径ラベル r
+        const rLabelX = cx + (R * 0.52) * cosT - 14 * scale * sinT;
+        const rLabelY = cy - (R * 0.52) * sinT - 14 * scale * cosT;
+        drawMathText('r', rLabelX, rLabelY, 22 * scale, 'center', 'middle', axisColor, false);
+
+        // 動点 P1 から水平軸への垂線（長さ y）
+        if (Math.abs(sinT) > 0.03) {
+          ctx.save();
+          ctx.strokeStyle = ySegColor;
+          ctx.lineWidth = isColor ? 2.6 * scale : 1.5 * scale;
+          if (!isColor) ctx.setLineDash([4 * scale, 4 * scale]);
+          ctx.beginPath();
+          ctx.moveTo(p1x, p1y);
+          ctx.lineTo(p1x, cy);
+          ctx.stroke();
+          ctx.restore();
+
+          // 変位ラベル y（垂線の外側）
+          if (Math.abs(R * sinT) > 22 * scale) {
+            const yOffX = cosT >= 0 ? 15 * scale : -15 * scale;
+            drawMathText('y', p1x + yOffX, (p1y + cy) / 2, 22 * scale, 'center', 'middle', ySegColor, false);
+          }
+        }
+
+        // 中心から垂線の足までの水平成分ラベル x
+        if (Math.abs(R * cosT) > 26 * scale) {
+          const xOffY = sinT >= 0 ? 18 * scale : -18 * scale;
+          drawMathText('x', (cx + p1x) / 2, cy + xOffY, 22 * scale, 'center', 'middle', axisColor, false);
+        }
+
+        // ------------------------------------------------------------
+        // 5. 中央エリア：縦軸上の単振動
+        // ------------------------------------------------------------
+        const yAxisTop = H * 0.225;
+        const yAxisBottom = H * 0.815;
+        ctx.lineWidth = 1.8 * scale;
+        drawArrow(axisY1, yAxisBottom, axisY1, yAxisTop, 11 * scale, axisColor);
+
+        // 軸ラベル y, O, r, -r
+        drawMathText('y', axisY1 - 14 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, false);
+        drawMathText('O', axisY1 - 16 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, false);
+        drawMathText('r', axisY1 - 16 * scale, cy - R, 22 * scale, 'center', 'middle', axisColor, true);
+        drawMathText('−r', axisY1 - 20 * scale, cy + R, 22 * scale, 'center', 'middle', axisColor, true);
+
+        // カラー強調ON時：原点Oから動点P2までの変位 y を太線で強調
+        if (isColor && Math.abs(sinT) > 0.02) {
+          ctx.save();
+          ctx.strokeStyle = ySegColor;
+          ctx.lineWidth = 4.2 * scale;
+          ctx.beginPath();
+          ctx.moveTo(axisY1, cy);
+          ctx.lineTo(axisY1, p2y);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // 単振動の変位ラベル y
+        if (Math.abs(R * sinT) > 22 * scale) {
+          drawMathText('y', axisY1 + 20 * scale, (cy + p2y) / 2, 22 * scale, 'center', 'middle', ySegColor, false);
+        }
+
+        // ------------------------------------------------------------
+        // 6. 右エリア：正弦波グラフ（y = r sin θ）
+        // ------------------------------------------------------------
+        ctx.lineWidth = 1.8 * scale;
+        drawArrow(axisY2, yAxisBottom, axisY2, yAxisTop, 11 * scale, axisColor);
+        drawMathText('y', axisY2 - 14 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, false);
+        drawMathText('O', axisY2 - 16 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, false);
+
+        // 90°, 180°, 270°, 360° のX座標
+        const x90 = axisY2 + 0.25 * w360;
+        const x180 = axisY2 + 0.50 * w360;
+        const x270 = axisY2 + 0.75 * w360;
+        const x360 = axisY2 + 1.00 * w360;
+
+        // ピーク位置（90°, 270°）の縦点線
+        ctx.save();
+        ctx.strokeStyle = '#777777';
+        ctx.lineWidth = 1.2 * scale;
+        ctx.setLineDash([3 * scale, 4 * scale]);
+        // 90°
+        ctx.beginPath();
+        ctx.moveTo(x90, cy - R);
+        ctx.lineTo(x90, cy);
+        ctx.stroke();
+        // 270°
+        ctx.beginPath();
+        ctx.moveTo(x270, cy + R);
+        ctx.lineTo(x270, cy);
+        ctx.stroke();
+        ctx.restore();
+
+        // 横軸の角度目盛り（90°, 180°, 270°, 360°）
+        const tickY = cy + 24 * scale;
+        drawMathText('90°', x90, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+        drawMathText('180°', x180, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+        drawMathText('270°', x270, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+        drawMathText('360°', x360 + 8 * scale, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+
+        // 正弦波曲線 y = r sin θ の描画
+        const maxDrawDeg = isTrace ? thetaDeg : 382;
+        if (isTrace) {
+          // 「軌跡を描画」ON時は全体像を薄いガイド線で補助表示
+          ctx.save();
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 2 * scale;
+          ctx.beginPath();
+          for (let d = 0; d <= 382; d += 1) {
+            const gx = axisY2 + (d / 360) * w360;
+            const gy = cy - R * Math.sin((d * Math.PI) / 180);
+            if (d === 0) ctx.moveTo(gx, gy);
+            else ctx.lineTo(gx, gy);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.strokeStyle = curveColor;
+        ctx.lineWidth = 2.6 * scale;
+        ctx.beginPath();
+        for (let d = 0; d <= maxDrawDeg; d += 1) {
+          const gx = axisY2 + (d / 360) * w360;
+          const gy = cy - R * Math.sin((d * Math.PI) / 180);
+          if (d === 0) ctx.moveTo(gx, gy);
+          else ctx.lineTo(gx, gy);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // 数式ラベル「y = r sin θ」
+        drawMathText('y = r sin θ', axisY2 + w360 * 0.72, cy - R * 0.65, 25 * scale, 'center', 'middle', axisColor, false);
+
+        // グラフ上の動点 P3 から横軸 θ への垂線（点線）
+        if (Math.abs(sinT) > 0.02) {
+          ctx.save();
+          ctx.strokeStyle = guideColor;
+          ctx.lineWidth = 1.4 * scale;
+          ctx.setLineDash([4 * scale, 4 * scale]);
+          ctx.beginPath();
+          ctx.moveTo(p3x, p3y);
+          ctx.lineTo(p3x, cy);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // 横軸上の現在位置ラベル θ
+        if (thetaDeg > 4) {
+          drawMathText('θ', p3x, tickY, 22 * scale, 'center', 'middle', thetaColor, true);
+        }
+
+        // ------------------------------------------------------------
+        // 7. 3つの動点をつなぐ1本の水平連動破線（P1 --- P2 --- P3）
+        // ------------------------------------------------------------
+        ctx.save();
+        ctx.strokeStyle = linkLineColor;
+        ctx.lineWidth = isColor ? 1.9 * scale : 1.4 * scale;
+        ctx.setLineDash([5 * scale, 5 * scale]);
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p3x, p3y);
+        ctx.stroke();
+        ctx.restore();
+
+        // ------------------------------------------------------------
+        // 8. 3つの動点（黒丸 / カラー強調時は赤丸）の描画
+        // ------------------------------------------------------------
+        const dotRadius = 6.2 * scale;
+        [
+          [p1x, p1y],
+          [p2x, p2y],
+          [p3x, p3y]
+        ].forEach(([dx, dy]) => {
+          ctx.save();
+          ctx.fillStyle = dotColor;
+          ctx.beginPath();
+          ctx.arc(dx, dy, dotRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      /**
+       * スライダー・数値表示・有名角ボタンのアクティブ状態を更新
+       */
+      function updateUI() {
+        const roundedDeg = Math.round(thetaDeg);
+        angleSlider.value = roundedDeg;
+        thetaDisp.textContent = `${roundedDeg}°`;
+
+        const sinVal = Math.sin((roundedDeg * Math.PI) / 180);
+        if (exactLabels[roundedDeg] !== undefined) {
+          yDisp.textContent = exactLabels[roundedDeg];
+        } else {
+          const sign = sinVal > 0 ? '+' : '';
+          yDisp.textContent = `${sign}${sinVal.toFixed(2)} r`;
+        }
+
+        presetBtns.forEach(btn => {
+          const d = Number(btn.dataset.deg);
+          if (d === roundedDeg) {
+            btn.classList.add('bg-blue-50', 'border-blue-500', 'text-blue-700', 'font-bold');
+            btn.classList.remove('bg-white', 'border-slate-200', 'text-slate-700');
+          } else {
+            btn.classList.remove('bg-blue-50', 'border-blue-500', 'text-blue-700', 'font-bold');
+            btn.classList.add('bg-white', 'border-slate-200', 'text-slate-700');
+          }
+        });
+      }
+
+      /**
+       * アニメーションループ
+       */
+      function animate(timestamp) {
+        if (lastTimestamp !== null && isPlaying && !isDragging) {
+          const dt = (timestamp - lastTimestamp) / 1000;
+          thetaDeg += degPerSec * dt;
+          if (thetaDeg >= 360) {
+            thetaDeg %= 360;
+          }
+          updateUI();
+          draw();
+        }
+        lastTimestamp = timestamp;
+        requestAnimationFrame(animate);
+      }
+
+      /**
+       * 再生・一時停止の切り替え
+       */
+      function setPlaying(play) {
+        isPlaying = play;
+        playPauseBtn.innerHTML = isPlaying
+          ? '<span>⏸</span><span>一時停止</span>'
+          : '<span>▶</span><span>再生</span>';
+        if (isPlaying) {
+          lastTimestamp = performance.now();
+        }
+      }
+
+      /**
+       * 指定角度へ設定
+       */
+      function setAngle(deg) {
+        if (deg === 360) {
+          thetaDeg = 360;
+        } else {
+          thetaDeg = ((deg % 360) + 360) % 360;
+        }
+        updateUI();
+        draw();
+      }
+
+      /**
+       * キャンバス上のポインタ座標から角度 θ を直接操作するハンドラ
+       */
+      function getCanvasPoint(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        return {
+          x: (clientX - rect.left) * dpr,
+          y: (clientY - rect.top) * dpr
+        };
+      }
+
+      function handlePointerDown(clientX, clientY) {
+        const pt = getCanvasPoint(clientX, clientY);
+        const distCircle = Math.hypot(pt.x - layout.cx, pt.y - layout.cy);
+        // 左の円付近をクリック/タッチした場合
+        if (distCircle <= layout.R * 1.45) {
+          isDragging = true;
+          dragTarget = 'circle';
+          setPlaying(false);
+          updateAngleFromPointer(pt);
+        } else if (pt.x >= layout.axisY2 - 20 && pt.x <= layout.axisY2 + layout.w360 + 20) {
+          // 右の正弦波グラフ付近をクリック/タッチした場合
+          isDragging = true;
+          dragTarget = 'graph';
+          setPlaying(false);
+          updateAngleFromPointer(pt);
+        }
+      }
+
+      function updateAngleFromPointer(pt) {
+        if (!isDragging) return;
+        if (dragTarget === 'circle') {
+          const dx = pt.x - layout.cx;
+          const dy = layout.cy - pt.y; // 上向きが正
+          let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+          if (deg < 0) deg += 360;
+          setAngle(Math.round(deg));
+        } else if (dragTarget === 'graph') {
+          const ratio = Math.max(0, Math.min(1, (pt.x - layout.axisY2) / layout.w360));
+          setAngle(Math.round(ratio * 360));
+        }
+      }
+
+      // マウス・タッチイベント登録
+      canvas.addEventListener('mousedown', (e) => {
+        handlePointerDown(e.clientX, e.clientY);
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          updateAngleFromPointer(getCanvasPoint(e.clientX, e.clientY));
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+        dragTarget = null;
+      });
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+      window.addEventListener('touchmove', (e) => {
+        if (isDragging && e.touches.length > 0) {
+          updateAngleFromPointer(getCanvasPoint(e.touches[0].clientX, e.touches[0].clientY));
+        }
+      }, { passive: true });
+      window.addEventListener('touchend', () => {
+        isDragging = false;
+        dragTarget = null;
+      });
+
+      // コントロールパネルのイベントリスナー
+      playPauseBtn.addEventListener('click', () => setPlaying(!isPlaying));
+
+      resetBtn.addEventListener('click', () => {
+        setPlaying(false);
+        setAngle(0);
+      });
+
+      stepBackBtn.addEventListener('click', () => {
+        setPlaying(false);
+        setAngle(Math.round(thetaDeg) - 1);
+      });
+
+      stepFwdBtn.addEventListener('click', () => {
+        setPlaying(false);
+        const next = Math.round(thetaDeg) + 1;
+        setAngle(next > 360 ? 0 : next);
+      });
+
+      angleSlider.addEventListener('input', (e) => {
+        setPlaying(false);
+        setAngle(Number(e.target.value));
+      });
+
+      presetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          setPlaying(false);
+          setAngle(Number(btn.dataset.deg));
+        });
+      });
+
+      speedSelect.addEventListener('change', (e) => {
+        degPerSec = Number(e.target.value);
+      });
+
+      colorHighlightChk.addEventListener('change', draw);
+      traceModeChk.addEventListener('change', draw);
+
+      // 全画面表示（ブラウザ標準API ＋ iframeプレビュー用フォールバック）
+      fullscreenBtn.addEventListener('click', () => {
+        const isPseudo = appContainer.classList.contains('pseudo-fullscreen');
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else if (isPseudo) {
+          appContainer.classList.remove('pseudo-fullscreen');
+          fullscreenBtn.textContent = '⛶ 全画面';
+          resizeCanvas();
+        } else {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {
+              // iframe制限等で拒否された場合は擬似全画面に切り替え
+              appContainer.classList.add('pseudo-fullscreen');
+              fullscreenBtn.textContent = '✕ 戻る';
+              resizeCanvas();
+            });
+          } else {
+            appContainer.classList.add('pseudo-fullscreen');
+            fullscreenBtn.textContent = '✕ 戻る';
+            resizeCanvas();
+          }
+        }
+      });
+
+      document.addEventListener('fullscreenchange', () => {
+        fullscreenBtn.textContent = document.fullscreenElement ? '✕ 戻る' : '⛶ 全画面';
+        resizeCanvas();
+      });
+
+      // キーボードショートカット（Spaceで再生/一時停止、左右矢印で1°微調整）
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setPlaying(!isPlaying);
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          setPlaying(false);
+          setAngle(Math.round(thetaDeg) - 1);
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          setPlaying(false);
+          const next = Math.round(thetaDeg) + 1;
+          setAngle(next > 360 ? 0 : next);
+        }
+      });
+
+      // リサイズ監視
+      window.addEventListener('resize', resizeCanvas);
+
+      // ページ読み込み完了時に初期化してアニメーションを開始
+      window.onload = function () {
+        resizeCanvas();
+        updateUI();
+        requestAnimationFrame(animate);
+      };
+    })();
+  </script>
+</body>
+</html>

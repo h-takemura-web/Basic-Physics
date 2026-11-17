@@ -347,15 +347,17 @@
         const p3y = p1y;
 
         // ------------------------------------------------------------
-        // 1. 見出し（「等速円運動」「単振動」）
+        // 1. 見出し（「等速円運動」「単振動」「正弦曲線」）
         // ------------------------------------------------------------
+        const headerY = H * 0.12;
         ctx.save();
         ctx.fillStyle = '#111111';
-        ctx.font = `500 ${Math.round(28 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
+        ctx.font = `600 ${Math.round(26 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('等速円運動', cx, H * 0.13);
-        ctx.fillText('単振動', W * 0.525, H * 0.13);
+        ctx.fillText('等速円運動', cx, headerY);
+        ctx.fillText('単振動', axisY1, headerY);
+        ctx.fillText('正弦曲線', axisY2 + w360 * 0.5, headerY);
         ctx.restore();
 
         // ------------------------------------------------------------

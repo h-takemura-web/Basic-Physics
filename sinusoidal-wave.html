@@ -92,19 +92,18 @@
           <input id="angleSlider" type="range" min="0" max="360" step="1" value="45" class="w-[140px] flex-none accent-blue-600 bg-slate-200">
         </div>
 
-        <!-- 現在の角度 θ と変位 y のリアルタイム数値表示（固定幅でレイアウト揺れを防止） -->
-        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-1.5 math-font flex items-center gap-3 text-base sm:text-lg whitespace-nowrap w-[285px] sm:w-[300px] shrink-0 overflow-hidden" style="font-variant-numeric: tabular-nums;">
-          <div class="shrink-0">
-            <span class="italic">θ</span> = <span id="thetaDisp" class="inline-block w-[42px] text-right font-bold text-slate-900">45°</span>
+        <!-- リアルタイム数値表示ボックス（固定幅にしてレイアウトのガタつきを防止） -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 math-font text-sm sm:text-base flex items-center justify-between gap-3 w-[250px] sm:w-[270px] flex-none tabular-nums">
+          <div class="whitespace-nowrap">
+            <span class="italic">θ</span> = <span id="thetaDisp" class="font-bold text-slate-900 inline-block w-[42px] text-right">45°</span>
           </div>
-          <div class="h-4 w-px bg-slate-300 shrink-0"></div>
-          <div class="shrink-0">
-            <span class="italic">y</span> = <span id="yDisp" class="font-bold text-slate-900">0.71 r  (√2/2 r)</span>
+          <div class="whitespace-nowrap flex-1 text-right">
+            <span class="italic">y</span> = <span id="yDisp" class="font-bold text-slate-900">0.71 r (√2/2 r)</span>
           </div>
         </div>
       </div>
 
-      <!-- 下段：有名角ワンクリックジャンプ・速度切替・表示オプション・全画面 -->
+      <!-- 下段：有名角ワンクリックジャンプ・表示切替・速度切替・表示オプション・全画面 -->
       <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
         
         <!-- 有名角ワンクリックジャンプボタン -->
@@ -120,6 +119,20 @@
           <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="180">180°</button>
           <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="270">270°</button>
           <button type="button" class="angle-btn px-2 py-1 text-xs sm:text-sm rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition" data-deg="360">360°</button>
+        </div>
+
+        <!-- 表示切替（等速円運動・単振動・正弦曲線）トグルボタングループ -->
+        <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="表示切替">
+          <span class="text-xs font-medium text-slate-500 mr-0.5">表示切替:</span>
+          <button id="toggleCircleBtn" type="button" aria-pressed="true" class="px-2.5 py-1 text-xs sm:text-sm rounded-md border border-blue-500 bg-blue-50 text-blue-700 font-semibold transition flex items-center gap-1">
+            <span class="toggle-icon">✓</span><span>等速円運動</span>
+          </button>
+          <button id="toggleSHMBtn" type="button" aria-pressed="true" class="px-2.5 py-1 text-xs sm:text-sm rounded-md border border-blue-500 bg-blue-50 text-blue-700 font-semibold transition flex items-center gap-1">
+            <span class="toggle-icon">✓</span><span>単振動</span>
+          </button>
+          <button id="toggleSineBtn" type="button" aria-pressed="true" class="px-2.5 py-1 text-xs sm:text-sm rounded-md border border-blue-500 bg-blue-50 text-blue-700 font-semibold transition flex items-center gap-1">
+            <span class="toggle-icon">✓</span><span>正弦曲線</span>
+          </button>
         </div>
 
         <!-- 速度・表示オプション・全画面ボタン -->
@@ -178,6 +191,9 @@
       const traceModeChk = document.getElementById('traceMode');
       const fullscreenBtn = document.getElementById('fullscreenBtn');
       const presetBtns = document.querySelectorAll('.angle-btn');
+      const toggleCircleBtn = document.getElementById('toggleCircleBtn');
+      const toggleSHMBtn = document.getElementById('toggleSHMBtn');
+      const toggleSineBtn = document.getElementById('toggleSineBtn');
 
       // シミュレーション状態変数
       let thetaDeg = 45;          // 初期角度（添付図解と同じ約45°）
@@ -186,58 +202,54 @@
       let lastTimestamp = null;   // 前フレームのタイムスタンプ
       let isDragging = false;     // キャンバス上のドラッグ操作中フラグ
       let dragTarget = null;      // 'circle' または 'graph'
+      let showCircle = true;      // 「等速円運動」の表示状態
+      let showSHM = true;         // 「単振動」の表示状態
+      let showSine = true;        // 「正弦曲線」の表示状態
 
-      // 最新の座標レイアウト情報（ドラッグ判定用）
+      // レイアウト座標のキャッシュ（ドラッグ判定用）
       let layout = {
-        W: 1200,
-        H: 600,
-        cx: 180,
-        cy: 320,
-        R: 130,
-        axisY1: 446,
-        axisY2: 620,
-        w360: 458
+        cx: 0,
+        cy: 0,
+        R: 0,
+        axisY1: 0,
+        axisY2: 0,
+        w360: 0
       };
 
-      // 有名角における厳密表現（高校1年「物理基礎」・三角比の確認用）
+      // 有名角の厳密値ラベル（高校物理・三角比の復習用）
       const exactLabels = {
-        0: "0",
-        30: "0.50 r  (1/2 r)",
-        45: "0.71 r  (√2/2 r)",
-        60: "0.87 r  (√3/2 r)",
-        90: "+1.00 r",
-        120: "0.87 r  (√3/2 r)",
-        135: "0.71 r  (√2/2 r)",
-        150: "0.50 r  (1/2 r)",
-        180: "0",
-        210: "-0.50 r  (-1/2 r)",
-        225: "-0.71 r  (-√2/2 r)",
-        240: "-0.87 r  (-√3/2 r)",
-        270: "-1.00 r",
-        300: "-0.87 r  (-√3/2 r)",
-        315: "-0.71 r  (-√2/2 r)",
-        330: "-0.50 r  (-1/2 r)",
-        360: "0"
+        0: '0',
+        30: '0.50 r (1/2 r)',
+        45: '0.71 r (√2/2 r)',
+        60: '0.87 r (√3/2 r)',
+        90: '+1.00 r',
+        120: '0.87 r (√3/2 r)',
+        135: '0.71 r (√2/2 r)',
+        150: '0.50 r (1/2 r)',
+        180: '0',
+        210: '-0.50 r (-1/2 r)',
+        225: '-0.71 r (-√2/2 r)',
+        240: '-0.87 r (-√3/2 r)',
+        270: '-1.00 r',
+        300: '-0.87 r (-√3/2 r)',
+        315: '-0.71 r (-√2/2 r)',
+        330: '-0.50 r (-1/2 r)',
+        360: '0'
       };
 
       /**
-       * 高DPIディスプレイに対応したキャンバスリサイズ処理
+       * High-DPI（Retina等）対応のキャンバスリサイズ処理
        */
       function resizeCanvas() {
-        try {
-          const rect = canvasWrapper.getBoundingClientRect();
-          if (rect.width === 0 || rect.height === 0) return;
-          const dpr = window.devicePixelRatio || 1;
-          canvas.width = Math.round(rect.width * dpr);
-          canvas.height = Math.round(rect.height * dpr);
-          draw();
-        } catch (err) {
-          console.error('Canvas resize error:', err);
-        }
+        const rect = canvasWrapper.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        draw();
       }
 
       /**
-       * 矢印付きの直線を描画するヘルパー関数
+       * 矢印を描画するヘルパー関数
        */
       function drawArrow(x1, y1, x2, y2, headLen, color) {
         const angle = Math.atan2(y2 - y1, x2 - x1);
@@ -265,13 +277,13 @@
       }
 
       /**
-       * 教科書風の数式・記号（セリフ体イタリック）を描画するヘルパー関数
+       * 数式・記号テキストをセリフ体イタリックで描画するヘルパー関数
        */
       function drawMathText(text, x, y, size, align, baseline, color, withBg) {
         ctx.save();
-        ctx.font = `italic ${size}px "Times New Roman", "Cambria Math", Georgia, serif`;
-        ctx.textAlign = align || 'center';
-        ctx.textBaseline = baseline || 'middle';
+        ctx.font = `italic ${Math.round(size)}px "Times New Roman", "Cambria Math", Georgia, serif`;
+        ctx.textAlign = align;
+        ctx.textBaseline = baseline;
 
         if (withBg) {
           const metrics = ctx.measureText(text);
@@ -288,153 +300,131 @@
           ctx.fillRect(bx - padX, by - padY, metrics.width + padX * 2, size + padY * 2);
         }
 
-        ctx.fillStyle = color || '#111111';
+        ctx.fillStyle = color;
         ctx.fillText(text, x, y);
         ctx.restore();
       }
 
       /**
-       * 天井（固定端：水平線＋斜線ハッチング）を描画するヘルパー関数
+       * 単振動のばねをつるす天井（固定端と斜線ハッチング）を描画
        */
       function drawCeiling(x, y, scale) {
-        const halfW = 28 * scale;
+        const halfW = 30 * scale;
         const hatchH = 10 * scale;
+        const step = 7 * scale;
+
         ctx.save();
         ctx.strokeStyle = '#111111';
-        ctx.lineWidth = 2.0 * scale;
+        ctx.lineWidth = 2.2 * scale;
         ctx.beginPath();
         ctx.moveTo(x - halfW, y);
         ctx.lineTo(x + halfW, y);
         ctx.stroke();
 
-        // 斜線ハッチング
-        ctx.lineWidth = 1.2 * scale;
-        const step = 7 * scale;
+        ctx.lineWidth = 1.3 * scale;
         ctx.beginPath();
-        for (let hx = x - halfW + 4 * scale; hx <= x + halfW - 2 * scale; hx += step) {
+        for (let hx = x - halfW + 4 * scale; hx <= x + halfW; hx += step) {
           ctx.moveTo(hx, y);
-          ctx.lineTo(hx + 6 * scale, y - hatchH);
+          ctx.lineTo(hx - 6 * scale, y - hatchH);
         }
         ctx.stroke();
-
-        // ばね固定端の小さな黒丸
-        ctx.fillStyle = '#111111';
-        ctx.beginPath();
-        ctx.arc(x, y, 3.2 * scale, 0, Math.PI * 2);
-        ctx.fill();
         ctx.restore();
       }
 
       /**
-       * 天井から吊るされた立体的なコイルばねを描画するヘルパー関数
-       * 巻数（12巻）を一定に保ち、おもりの位置に応じてピッチ（粗密）が変化する
+       * 天井からおもり（P2）まで伸び縮みする立体的なコイルばねを描画
+       * 巻数を一定（12巻）に保つことで、伸び縮みに応じて粗密が自然に変化する
        */
       function drawVerticalSpring(x, topY, bottomY, scale, isColor) {
-        const coils = 12;                     // 巻数（一定）
-        const coilRadius = 11.5 * scale;      // コイルの半径
-        const topHookLen = 7 * scale;         // 上部直線フック長
-        const botHookLen = 7 * scale;         // 下部直線フック長
-
-        const coilStartY = topY + topHookLen;
-        const coilEndY = Math.max(coilStartY + 12 * scale, bottomY - botHookLen);
-        const coilLength = coilEndY - coilStartY;
-        const pitch = coilLength / coils;
-
-        // 立体投影の奥行き傾き（縮んだ状態でもループが反転しないよう制限）
-        const perspAmp = Math.min(coilRadius * 0.22, pitch * 0.26);
-
-        const backStroke = isColor ? '#64748b' : '#666666';
-        const frontStroke = isColor ? '#0f172a' : '#111111';
-        const mainWidth = 2.1 * scale;
-        const haloWidth = mainWidth + 3.2 * scale;
-
-        // 左右の折り返し点（t = π/2 + kπ）で分割し、奥側半周→手前側半周の順に描画
-        const intervals = [];
-        intervals.push({ t0: 0, t1: Math.PI * 0.5, isFront: true });
-        for (let k = 0; k < coils * 2 - 1; k++) {
-          const t0 = Math.PI * (0.5 + k);
-          const t1 = Math.PI * (1.5 + k);
-          const isFront = Math.cos((t0 + t1) * 0.5) > 0;
-          intervals.push({ t0, t1, isFront });
-        }
-        intervals.push({
-          t0: Math.PI * (2 * coils - 0.5),
-          t1: Math.PI * (2 * coils),
-          isFront: true
-        });
-
-        const strokeCoilSegment = (t0, t1, strokeColor, lineWidth) => {
-          const steps = Math.max(6, Math.round(((t1 - t0) / Math.PI) * 14));
-          ctx.strokeStyle = strokeColor;
-          ctx.lineWidth = lineWidth;
-          ctx.beginPath();
-          for (let s = 0; s <= steps; s++) {
-            const t = t0 + ((t1 - t0) * s) / steps;
-            const px = x + coilRadius * Math.sin(t);
-            const py =
-              coilStartY +
-              coilLength * (t / (2 * Math.PI * coils)) +
-              perspAmp * (1 - Math.cos(t));
-            if (s === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.stroke();
-        };
+        const hookLen = 10 * scale;
+        const startY = topY + hookLen;
+        const endY = bottomY - hookLen;
+        const coilSpan = Math.max(8 * scale, endY - startY);
+        const turns = 12;
+        const radiusX = 11 * scale;
+        const steps = turns * 24;
 
         ctx.save();
+
+        // 上下の直線フック部分
+        ctx.strokeStyle = isColor ? '#334155' : '#222222';
+        ctx.lineWidth = 2.0 * scale;
+        ctx.beginPath();
+        ctx.moveTo(x, topY);
+        ctx.lineTo(x, startY);
+        ctx.moveTo(x, endY);
+        ctx.lineTo(x, bottomY);
+        ctx.stroke();
+
+        // 白フチ（背後のy軸や破線と重なってもばねの輪郭がくっきり見えるようにする）
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+        ctx.lineWidth = 4.6 * scale;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
-        // 上下フックの白フチ＋本線
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = haloWidth;
         ctx.beginPath();
-        ctx.moveTo(x, topY);
-        ctx.lineTo(x, coilStartY);
-        ctx.moveTo(x, coilEndY);
-        ctx.lineTo(x, bottomY);
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const angle = t * turns * Math.PI * 2;
+          const px = x + Math.sin(angle) * radiusX;
+          const py = startY + t * coilSpan;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
         ctx.stroke();
 
-        ctx.strokeStyle = frontStroke;
-        ctx.lineWidth = mainWidth;
+        // ばね本体（螺旋の立体投影）
+        ctx.strokeStyle = isColor ? '#334155' : '#1e293b';
+        ctx.lineWidth = 2.1 * scale;
         ctx.beginPath();
-        ctx.moveTo(x, topY);
-        ctx.lineTo(x, coilStartY);
-        ctx.moveTo(x, coilEndY);
-        ctx.lineTo(x, bottomY);
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const angle = t * turns * Math.PI * 2;
+          const px = x + Math.sin(angle) * radiusX;
+          const py = startY + t * coilSpan;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
         ctx.stroke();
-
-        // パス1：奥側半周（cos(t) < 0）
-        for (const seg of intervals) {
-          if (!seg.isFront) {
-            strokeCoilSegment(seg.t0, seg.t1, '#ffffff', haloWidth);
-            strokeCoilSegment(seg.t0, seg.t1, backStroke, mainWidth * 0.92);
-          }
-        }
-
-        // パス2：手前側半周（cos(t) > 0）白フチ付きで立体交差を表現
-        for (const seg of intervals) {
-          if (seg.isFront) {
-            strokeCoilSegment(seg.t0, seg.t1, '#ffffff', haloWidth);
-            strokeCoilSegment(seg.t0, seg.t1, frontStroke, mainWidth);
-          }
-        }
 
         ctx.restore();
       }
 
       /**
-       * メイン描画関数：添付図解「等速円運動と単振動」のレイアウト・記号・補助線を再現
+       * UIコントロール（スライダー・数値表示・有名角ハイライト）を現在角度に同期
+       */
+      function updateUI() {
+        const rounded = Math.round(thetaDeg);
+        angleSlider.value = rounded;
+        thetaDisp.textContent = `${rounded}°`;
+
+        if (exactLabels[rounded] !== undefined) {
+          yDisp.textContent = exactLabels[rounded];
+        } else {
+          const sinVal = Math.sin((rounded * Math.PI) / 180);
+          const sign = sinVal > 0 ? '+' : '';
+          yDisp.textContent = `${sign}${sinVal.toFixed(2)} r`;
+        }
+
+        presetBtns.forEach((btn) => {
+          const deg = Number(btn.dataset.deg);
+          if (deg === rounded) {
+            btn.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-700', 'font-bold');
+            btn.classList.remove('border-slate-200', 'bg-white', 'text-slate-700');
+          } else {
+            btn.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-700', 'font-bold');
+            btn.classList.add('border-slate-200', 'bg-white', 'text-slate-700');
+          }
+        });
+      }
+
+      /**
+       * メイン描画処理
        */
       function draw() {
         const W = canvas.width;
         const H = canvas.height;
-        if (W === 0 || H === 0) return;
-
-        // 1200x600 を基準としたスケーリング係数
         const scale = W / 1200;
 
-        // 背景を白でクリア
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, W, H);
@@ -442,28 +432,28 @@
         const isColor = colorHighlightChk.checked;
         const isTrace = traceModeChk.checked;
 
-        // 配色設定（通常時は添付図解のモノクロ印刷スタイル、カラー強調時は赤・青で視認性向上）
+        // 配色設定
         const axisColor = '#111111';
         const guideColor = '#555555';
         const curveColor = '#111111';
-        const dotColor = isColor ? '#dc2626' : '#111111';       // 赤または黒
-        const linkLineColor = isColor ? '#dc2626' : '#444444';  // 連動水平破線
-        const ySegColor = isColor ? '#dc2626' : '#222222';      // 変位 y
-        const thetaColor = isColor ? '#2563eb' : '#111111';     // 角度 θ
+        const dotColor = isColor ? '#dc2626' : '#111111';
+        const linkLineColor = isColor ? '#dc2626' : '#444444';
+        const ySegColor = isColor ? '#dc2626' : '#222222';
+        const thetaColor = isColor ? '#2563eb' : '#111111';
 
-        // 添付図解の幾何配置比率
-        const cy = H * 0.535;            // 水平基準軸（x軸 / θ軸）のY座標
-        const R = H * 0.215;             // 円の半径 r
-        const cx = W * 0.148;            // 円の中心 X座標
-        const axisY1 = W * 0.372;        // 中央の単振動 y軸 X座標
-        const axisY2 = W * 0.516;        // 右のグラフの y軸 X座標（原点O）
-        const w360 = W * 0.382;          // θ = 0° 〜 360° の横幅
-        const thetaAxisEnd = W * 0.960;  // θ軸の矢印先端
-        const leftEdge = W * 0.032;      // 水平軸・破線の左端
-        const rightGuideEnd = W * 0.965; // 上下破線（r, -r）の右端
+        // 教科書図解の比率に基づく基準座標
+        const cy = H * 0.535;
+        const R = H * 0.215;
+        const cx = W * 0.148;
+        const axisY1 = W * 0.372;
+        const axisY2 = W * 0.516;
+        const w360 = W * 0.382;
+        const thetaAxisEnd = W * 0.960;
+        const leftEdge = W * 0.032;
+        const rightGuideEnd = W * 0.965;
 
-        // ドラッグ操作判定用に座標を保存
-        layout = { W, H, cx, cy, R, axisY1, axisY2, w360 };
+        // ドラッグ判定用にレイアウトを更新
+        layout = { cx, cy, R, axisY1, axisY2, w360 };
 
         const rad = (thetaDeg * Math.PI) / 180;
         const cosT = Math.cos(rad);
@@ -477,22 +467,11 @@
         const p3x = axisY2 + (thetaDeg / 360) * w360;     // 右：正弦波グラフ上の動点
         const p3y = p1y;
 
-        // ------------------------------------------------------------
-        // 1. 見出し（「等速円運動」「単振動」「正弦曲線」）
-        // ------------------------------------------------------------
+        // 上部見出しの共通高さ
         const headerY = H * 0.105;
-        ctx.save();
-        ctx.fillStyle = '#111111';
-        ctx.font = `600 ${Math.round(26 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('等速円運動', cx, headerY);
-        ctx.fillText('単振動', axisY1, headerY);
-        ctx.fillText('正弦曲線', axisY2 + w360 * 0.5, headerY);
-        ctx.restore();
 
         // ------------------------------------------------------------
-        // 2. 上限 (y = r) と下限 (y = -r) の水平破線
+        // 1. 上限 (y = r) と下限 (y = -r) の水平破線（全体ガイド）
         // ------------------------------------------------------------
         ctx.save();
         ctx.strokeStyle = guideColor;
@@ -513,179 +492,231 @@
         ctx.restore();
 
         // ------------------------------------------------------------
-        // 3. 基準の水平軸（左の円中心から右端の θ軸矢印まで貫通）
+        // 2. 基準の水平軸（左の円中心から右端の θ軸矢印まで貫通）
         // ------------------------------------------------------------
         ctx.lineWidth = 1.8 * scale;
         drawArrow(leftEdge, cy, thetaAxisEnd, cy, 11 * scale, axisColor);
-        drawMathText('θ', thetaAxisEnd + 16 * scale, cy + 16 * scale, 24 * scale, 'center', 'middle', thetaColor, false);
 
         // ------------------------------------------------------------
-        // 4. 左エリア：等速円運動
+        // 3. 左エリア：等速円運動（表示ON時のみ描画）
         // ------------------------------------------------------------
-        // 円周
-        ctx.save();
-        ctx.strokeStyle = axisColor;
-        ctx.lineWidth = 2.4 * scale;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-
-        // 中心点
-        ctx.save();
-        ctx.fillStyle = axisColor;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 5 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // 角度 θ の扇形と円弧
-        if (thetaDeg > 0.5) {
-          const arcR = R * 0.25;
+        if (showCircle) {
+          // 見出し「等速円運動」
           ctx.save();
-          if (isColor) {
-            ctx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+          ctx.fillStyle = '#111111';
+          ctx.font = `600 ${Math.round(26 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('等速円運動', cx, headerY);
+          ctx.restore();
+
+          // 円周
+          ctx.save();
+          ctx.strokeStyle = axisColor;
+          ctx.lineWidth = 2.4 * scale;
+          ctx.beginPath();
+          ctx.arc(cx, cy, R, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          // 中心点
+          ctx.save();
+          ctx.fillStyle = axisColor;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 5 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // 角度 θ の扇形と円弧
+          if (thetaDeg > 0.5) {
+            const arcR = R * 0.25;
+            ctx.save();
+            if (isColor) {
+              ctx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              ctx.arc(cx, cy, arcR, 0, -rad, true);
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.strokeStyle = thetaColor;
+            ctx.lineWidth = 1.7 * scale;
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
             ctx.arc(cx, cy, arcR, 0, -rad, true);
-            ctx.closePath();
-            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+
+            // 角度ラベル θ
+            const labelRad = Math.min(rad / 2, (35 * Math.PI) / 180);
+            const tx = cx + (arcR + 15 * scale) * Math.cos(labelRad);
+            const ty = cy - (arcR + 15 * scale) * Math.sin(labelRad);
+            drawMathText('θ', tx, ty, 22 * scale, 'center', 'middle', thetaColor, false);
           }
-          ctx.strokeStyle = thetaColor;
-          ctx.lineWidth = 1.7 * scale;
-          ctx.beginPath();
-          ctx.arc(cx, cy, arcR, 0, -rad, true);
-          ctx.stroke();
-          ctx.restore();
 
-          // 角度ラベル θ
-          const labelRad = Math.min(rad / 2, (35 * Math.PI) / 180);
-          const tx = cx + (arcR + 15 * scale) * Math.cos(labelRad);
-          const ty = cy - (arcR + 15 * scale) * Math.sin(labelRad);
-          drawMathText('θ', tx, ty, 22 * scale, 'center', 'middle', thetaColor, false);
-        }
-
-        // 中心から動点 P1 を結ぶ半径 r
-        ctx.save();
-        ctx.strokeStyle = axisColor;
-        ctx.lineWidth = 2.2 * scale;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(p1x, p1y);
-        ctx.stroke();
-        ctx.restore();
-
-        // 半径ラベル r
-        const rLabelX = cx + (R * 0.52) * cosT - 14 * scale * sinT;
-        const rLabelY = cy - (R * 0.52) * sinT - 14 * scale * cosT;
-        drawMathText('r', rLabelX, rLabelY, 22 * scale, 'center', 'middle', axisColor, false);
-
-        // 動点 P1 から水平軸への垂線（長さ y）
-        if (Math.abs(sinT) > 0.03) {
+          // 中心から動点 P1 を結ぶ半径 r
           ctx.save();
-          ctx.strokeStyle = ySegColor;
-          ctx.lineWidth = isColor ? 2.6 * scale : 1.5 * scale;
-          if (!isColor) ctx.setLineDash([4 * scale, 4 * scale]);
+          ctx.strokeStyle = axisColor;
+          ctx.lineWidth = 2.2 * scale;
           ctx.beginPath();
-          ctx.moveTo(p1x, p1y);
-          ctx.lineTo(p1x, cy);
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(p1x, p1y);
           ctx.stroke();
           ctx.restore();
 
-          // 変位ラベル y（垂線の外側）
-          if (Math.abs(R * sinT) > 22 * scale) {
-            const yOffX = cosT >= 0 ? 15 * scale : -15 * scale;
-            drawMathText('y', p1x + yOffX, (p1y + cy) / 2, 22 * scale, 'center', 'middle', ySegColor, false);
-          }
-        }
+          // 半径ラベル r
+          const rLabelX = cx + (R * 0.52) * cosT - 14 * scale * sinT;
+          const rLabelY = cy - (R * 0.52) * sinT - 14 * scale * cosT;
+          drawMathText('r', rLabelX, rLabelY, 22 * scale, 'center', 'middle', axisColor, false);
 
-        // 中心から垂線の足までの水平成分ラベル x
-        if (Math.abs(R * cosT) > 26 * scale) {
-          const xOffY = sinT >= 0 ? 18 * scale : -18 * scale;
-          drawMathText('x', (cx + p1x) / 2, cy + xOffY, 22 * scale, 'center', 'middle', axisColor, false);
+          // 動点 P1 から水平軸への垂線（長さ y）
+          if (Math.abs(sinT) > 0.03) {
+            ctx.save();
+            ctx.strokeStyle = ySegColor;
+            ctx.lineWidth = isColor ? 2.6 * scale : 1.5 * scale;
+            if (!isColor) ctx.setLineDash([4 * scale, 4 * scale]);
+            ctx.beginPath();
+            ctx.moveTo(p1x, p1y);
+            ctx.lineTo(p1x, cy);
+            ctx.stroke();
+            ctx.restore();
+
+            // 変位ラベル y（垂線の外側）
+            if (Math.abs(R * sinT) > 22 * scale) {
+              const yOffX = cosT >= 0 ? 15 * scale : -15 * scale;
+              drawMathText('y', p1x + yOffX, (p1y + cy) / 2, 22 * scale, 'center', 'middle', ySegColor, false);
+            }
+          }
+
+          // 中心から垂線の足までの水平成分ラベル x
+          if (Math.abs(R * cosT) > 26 * scale) {
+            const xOffY = sinT >= 0 ? 18 * scale : -18 * scale;
+            drawMathText('x', (cx + p1x) / 2, cy + xOffY, 22 * scale, 'center', 'middle', axisColor, false);
+          }
         }
 
         // ------------------------------------------------------------
-        // 5. 中央エリア：上からばねでつるした単振動
+        // 4. 中央エリア：上からばねでつるした単振動（表示ON時のみ描画）
         // ------------------------------------------------------------
         const ceilingY = cy - R * 1.54;
         const yAxisTop = ceilingY + 18 * scale;
         const yAxisBottom = H * 0.815;
-        ctx.lineWidth = 1.8 * scale;
-        drawArrow(axisY1, yAxisBottom, axisY1, yAxisTop, 11 * scale, axisColor);
 
-        // 軸ラベル y, O, r, -r（ばねの左外側に配置して視認性を確保）
-        drawMathText('y', axisY1 - 15 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, true);
-        drawMathText('O', axisY1 - 18 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, true);
-        drawMathText('r', axisY1 - 18 * scale, cy - R, 22 * scale, 'center', 'middle', axisColor, true);
-        drawMathText('−r', axisY1 - 22 * scale, cy + R, 22 * scale, 'center', 'middle', axisColor, true);
-
-        // 天井（固定端）の描画
-        drawCeiling(axisY1, ceilingY, scale);
-
-        // 天井からおもり P2 まで伸び縮みするばねを描画
-        drawVerticalSpring(axisY1, ceilingY, p2y, scale, isColor);
-
-        // カラー強調ON時：原点Oから動点P2までの変位 y をばねの右横に表示
-        if (isColor && Math.abs(sinT) > 0.02) {
+        if (showSHM) {
+          // 見出し「単振動」
           ctx.save();
-          ctx.strokeStyle = ySegColor;
-          ctx.lineWidth = 3.2 * scale;
+          ctx.fillStyle = '#111111';
+          ctx.font = `600 ${Math.round(26 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('単振動', axisY1, headerY);
+          ctx.restore();
+
+          ctx.lineWidth = 1.8 * scale;
+          drawArrow(axisY1, yAxisBottom, axisY1, yAxisTop, 11 * scale, axisColor);
+
+          // 軸ラベル y, O, r, -r（ばねの左外側に配置して視認性を確保）
+          drawMathText('y', axisY1 - 15 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, true);
+          drawMathText('O', axisY1 - 18 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, true);
+          drawMathText('r', axisY1 - 18 * scale, cy - R, 22 * scale, 'center', 'middle', axisColor, true);
+          drawMathText('−r', axisY1 - 22 * scale, cy + R, 22 * scale, 'center', 'middle', axisColor, true);
+
+          // 天井（固定端）の描画
+          drawCeiling(axisY1, ceilingY, scale);
+
+          // 天井からおもり P2 まで伸び縮みするばねを描画
+          drawVerticalSpring(axisY1, ceilingY, p2y, scale, isColor);
+
+          // カラー強調ON時：原点Oから動点P2までの変位 y をばねの右横に表示
+          if (isColor && Math.abs(sinT) > 0.02) {
+            ctx.save();
+            ctx.strokeStyle = ySegColor;
+            ctx.lineWidth = 3.2 * scale;
+            ctx.beginPath();
+            ctx.moveTo(axisY1 + 17 * scale, cy);
+            ctx.lineTo(axisY1 + 17 * scale, p2y);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 単振動の変位ラベル y（ばねの右外側に白背景付きで配置）
+          if (Math.abs(R * sinT) > 22 * scale) {
+            drawMathText('y', axisY1 + 27 * scale, (cy + p2y) / 2, 22 * scale, 'center', 'middle', ySegColor, true);
+          }
+        }
+
+        // ------------------------------------------------------------
+        // 5. 右エリア：正弦曲線（y = r sin θ）（表示ON時のみ描画）
+        // ------------------------------------------------------------
+        if (showSine) {
+          // 見出し「正弦曲線」
+          ctx.save();
+          ctx.fillStyle = '#111111';
+          ctx.font = `600 ${Math.round(26 * scale)}px "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('正弦曲線', axisY2 + w360 * 0.5, headerY);
+          ctx.restore();
+
+          // 水平基準軸右端のラベル θ
+          drawMathText('θ', thetaAxisEnd + 16 * scale, cy + 16 * scale, 24 * scale, 'center', 'middle', thetaColor, false);
+
+          ctx.lineWidth = 1.8 * scale;
+          drawArrow(axisY2, yAxisBottom, axisY2, yAxisTop, 11 * scale, axisColor);
+          drawMathText('y', axisY2 - 14 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, false);
+          drawMathText('O', axisY2 - 16 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, false);
+
+          // 横軸の角度目盛り位置（90°, 180°, 270°, 360°）
+          const x90 = axisY2 + 0.25 * w360;
+          const x180 = axisY2 + 0.50 * w360;
+          const x270 = axisY2 + 0.75 * w360;
+          const x360 = axisY2 + 1.00 * w360;
+
+          // 90° と 270° のピーク位置から横軸までの縦点線
+          ctx.save();
+          ctx.strokeStyle = '#777777';
+          ctx.lineWidth = 1.3 * scale;
+          ctx.setLineDash([3 * scale, 4 * scale]);
           ctx.beginPath();
-          ctx.moveTo(axisY1 + 17 * scale, cy);
-          ctx.lineTo(axisY1 + 17 * scale, p2y);
+          ctx.moveTo(x90, cy - R);
+          ctx.lineTo(x90, cy);
+          ctx.moveTo(x270, cy + R);
+          ctx.lineTo(x270, cy);
           ctx.stroke();
           ctx.restore();
-        }
 
-        // 単振動の変位ラベル y（ばねの右外側に白背景付きで配置）
-        if (Math.abs(R * sinT) > 22 * scale) {
-          drawMathText('y', axisY1 + 27 * scale, (cy + p2y) / 2, 22 * scale, 'center', 'middle', ySegColor, true);
-        }
+          // 横軸の角度目盛りラベル
+          const tickY = cy + 24 * scale;
+          drawMathText('90°', x90, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+          drawMathText('180°', x180, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+          drawMathText('270°', x270, tickY, 21 * scale, 'center', 'middle', axisColor, false);
+          drawMathText('360°', x360 + 8 * scale, tickY, 21 * scale, 'center', 'middle', axisColor, false);
 
-        // ------------------------------------------------------------
-        // 6. 右エリア：正弦曲線（y = r sin θ）
-        // ------------------------------------------------------------
-        ctx.lineWidth = 1.8 * scale;
-        drawArrow(axisY2, yAxisBottom, axisY2, yAxisTop, 11 * scale, axisColor);
-        drawMathText('y', axisY2 - 14 * scale, yAxisTop, 23 * scale, 'right', 'middle', axisColor, false);
-        drawMathText('O', axisY2 - 16 * scale, cy + 20 * scale, 22 * scale, 'center', 'middle', axisColor, false);
+          // サインカーブ y = r sin θ の描画（通常表示 / 軌跡モード切替）
+          const maxDrawDeg = isTrace ? thetaDeg : 382;
+          if (isTrace) {
+            // 軌跡モードON時：全区間（0°〜382°）を薄いグレーのガイド曲線で表示
+            ctx.save();
+            ctx.strokeStyle = '#dce1e7';
+            ctx.lineWidth = 2.2 * scale;
+            ctx.beginPath();
+            for (let d = 0; d <= 382; d += 1) {
+              const gx = axisY2 + (d / 360) * w360;
+              const gy = cy - R * Math.sin((d * Math.PI) / 180);
+              if (d === 0) ctx.moveTo(gx, gy);
+              else ctx.lineTo(gx, gy);
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
 
-        // 横軸の角度目盛り位置（90°, 180°, 270°, 360°）
-        const x90 = axisY2 + 0.25 * w360;
-        const x180 = axisY2 + 0.50 * w360;
-        const x270 = axisY2 + 0.75 * w360;
-        const x360 = axisY2 + 1.00 * w360;
-
-        // 90° と 270° のピーク位置から横軸までの縦点線
-        ctx.save();
-        ctx.strokeStyle = '#777777';
-        ctx.lineWidth = 1.3 * scale;
-        ctx.setLineDash([3 * scale, 4 * scale]);
-        ctx.beginPath();
-        ctx.moveTo(x90, cy - R);
-        ctx.lineTo(x90, cy);
-        ctx.moveTo(x270, cy + R);
-        ctx.lineTo(x270, cy);
-        ctx.stroke();
-        ctx.restore();
-
-        // 横軸の角度目盛りラベル
-        const tickY = cy + 24 * scale;
-        drawMathText('90°', x90, tickY, 21 * scale, 'center', 'middle', axisColor, false);
-        drawMathText('180°', x180, tickY, 21 * scale, 'center', 'middle', axisColor, false);
-        drawMathText('270°', x270, tickY, 21 * scale, 'center', 'middle', axisColor, false);
-        drawMathText('360°', x360 + 8 * scale, tickY, 21 * scale, 'center', 'middle', axisColor, false);
-
-        // サインカーブ y = r sin θ の描画（通常表示 / 軌跡モード切替）
-        const maxDrawDeg = isTrace ? thetaDeg : 382;
-        if (isTrace) {
-          // 軌跡モードON時：全区間（0°〜382°）を薄いグレーのガイド曲線で表示
+          // 0° から maxDrawDeg（通常時は382°、軌跡モード時は現在角度 θ）までの濃い実線
           ctx.save();
-          ctx.strokeStyle = '#dce1e7';
-          ctx.lineWidth = 2.2 * scale;
+          ctx.strokeStyle = isTrace && isColor ? '#2563eb' : curveColor;
+          ctx.lineWidth = 2.6 * scale;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
           ctx.beginPath();
-          for (let d = 0; d <= 382; d += 1) {
+          for (let d = 0; d <= maxDrawDeg; d += 1) {
             const gx = axisY2 + (d / 360) * w360;
             const gy = cy - R * Math.sin((d * Math.PI) / 180);
             if (d === 0) ctx.moveTo(gx, gy);
@@ -693,114 +724,69 @@
           }
           ctx.stroke();
           ctx.restore();
+
+          // グラフ右上付近に数式 y = r sin θ を描画
+          drawMathText('y = r sin θ', axisY2 + w360 * 0.72, cy - R * 0.65, 25 * scale, 'center', 'middle', axisColor, false);
+
+          // グラフ上の動点 P3 から横軸 θ への縦点線
+          if (Math.abs(sinT) > 0.02) {
+            ctx.save();
+            ctx.strokeStyle = guideColor;
+            ctx.lineWidth = 1.4 * scale;
+            ctx.setLineDash([4 * scale, 4 * scale]);
+            ctx.beginPath();
+            ctx.moveTo(p3x, p3y);
+            ctx.lineTo(p3x, cy);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 横軸上の現在角度ラベル θ（目盛り数字と重ならないよう白背景付き）
+          if (thetaDeg > 4) {
+            drawMathText('θ', p3x, tickY, 22 * scale, 'center', 'middle', thetaColor, true);
+          }
         }
 
-        // 0° から maxDrawDeg（通常時は382°、軌跡モード時は現在角度 θ）までの濃い実線
-        ctx.save();
-        ctx.strokeStyle = isTrace && isColor ? '#2563eb' : curveColor;
-        ctx.lineWidth = 2.6 * scale;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        for (let d = 0; d <= maxDrawDeg; d += 1) {
-          const gx = axisY2 + (d / 360) * w360;
-          const gy = cy - R * Math.sin((d * Math.PI) / 180);
-          if (d === 0) ctx.moveTo(gx, gy);
-          else ctx.lineTo(gx, gy);
+        // ------------------------------------------------------------
+        // 6. 最前面描画：表示中の動点リスト収集と水平連動破線
+        // ------------------------------------------------------------
+        const visiblePoints = [];
+        if (showCircle) {
+          visiblePoints.push({ x: p1x, y: p1y, radius: 6.5 * scale, lineWidth: 1.8 * scale });
         }
-        ctx.stroke();
-        ctx.restore();
+        if (showSHM) {
+          visiblePoints.push({ x: p2x, y: p2y, radius: 7.6 * scale, lineWidth: 2.0 * scale });
+        }
+        if (showSine) {
+          visiblePoints.push({ x: p3x, y: p3y, radius: 6.5 * scale, lineWidth: 1.8 * scale });
+        }
 
-        // グラフ右上付近に数式 y = r sin θ を描画
-        drawMathText('y = r sin θ', axisY2 + w360 * 0.72, cy - R * 0.65, 25 * scale, 'center', 'middle', axisColor, false);
-
-        // グラフ上の動点 P3 から横軸 θ への縦点線
-        if (Math.abs(sinT) > 0.02) {
+        // 表示中のパートが2つ以上ある場合、最左の動点から最右の動点まで水平連動破線を描画
+        if (visiblePoints.length >= 2) {
+          const leftPt = visiblePoints[0];
+          const rightPt = visiblePoints[visiblePoints.length - 1];
           ctx.save();
-          ctx.strokeStyle = guideColor;
-          ctx.lineWidth = 1.4 * scale;
-          ctx.setLineDash([4 * scale, 4 * scale]);
+          ctx.strokeStyle = linkLineColor;
+          ctx.lineWidth = isColor ? 2.2 * scale : 1.8 * scale;
+          ctx.setLineDash([6 * scale, 6 * scale]);
           ctx.beginPath();
-          ctx.moveTo(p3x, p3y);
-          ctx.lineTo(p3x, cy);
+          ctx.moveTo(leftPt.x, leftPt.y);
+          ctx.lineTo(rightPt.x, rightPt.y);
           ctx.stroke();
           ctx.restore();
         }
 
-        // 横軸上の現在角度ラベル θ（目盛り数字と重ならないよう白背景付き）
-        if (thetaDeg > 4) {
-          drawMathText('θ', p3x, tickY, 22 * scale, 'center', 'middle', thetaColor, true);
-        }
-
-        // ------------------------------------------------------------
-        // 7. 最前面描画：3つの動く点同士をつなぐ水平の連動破線（P1 --- P2 --- P3）
-        // ------------------------------------------------------------
-        ctx.save();
-        ctx.strokeStyle = linkLineColor;
-        ctx.lineWidth = isColor ? 2.2 * scale : 1.8 * scale;
-        ctx.setLineDash([6 * scale, 6 * scale]);
-        ctx.beginPath();
-        ctx.moveTo(p1x, p1y);
-        ctx.lineTo(p3x, p3y);
-        ctx.stroke();
-        ctx.restore();
-
-        // ------------------------------------------------------------
-        // 8. 最前面描画：3つの動点（円周上の点 P1・単振動のおもり P2・正弦曲線上の点 P3）
-        // ------------------------------------------------------------
-        const dotRadius = 6.5 * scale;
-        [
-          [p1x, p1y],
-          [p3x, p3y]
-        ].forEach(([dx, dy]) => {
+        // 表示中の動点（●）のみを最前面に描画
+        visiblePoints.forEach((pt) => {
           ctx.save();
           ctx.fillStyle = dotColor;
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.8 * scale;
+          ctx.lineWidth = pt.lineWidth;
           ctx.beginPath();
-          ctx.arc(dx, dy, dotRadius, 0, Math.PI * 2);
+          ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
           ctx.restore();
-        });
-
-        // 中央の単振動のおもり P2（ばねの下端に吊るされたおもり）
-        ctx.save();
-        ctx.fillStyle = dotColor;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.0 * scale;
-        ctx.beginPath();
-        ctx.arc(p2x, p2y, 7.6 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      /**
-       * スライダー・数値表示・有名角ボタンのアクティブ状態を更新
-       */
-      function updateUI() {
-        const roundedDeg = Math.round(thetaDeg);
-        angleSlider.value = roundedDeg;
-        thetaDisp.textContent = `${roundedDeg}°`;
-
-        const sinVal = Math.sin((roundedDeg * Math.PI) / 180);
-        if (exactLabels[roundedDeg] !== undefined) {
-          yDisp.textContent = exactLabels[roundedDeg];
-        } else {
-          const sign = sinVal > 0 ? '+' : '';
-          yDisp.textContent = `${sign}${sinVal.toFixed(2)} r`;
-        }
-
-        presetBtns.forEach(btn => {
-          const d = Number(btn.dataset.deg);
-          if (d === roundedDeg) {
-            btn.classList.add('bg-blue-50', 'border-blue-500', 'text-blue-700', 'font-bold');
-            btn.classList.remove('bg-white', 'border-slate-200', 'text-slate-700');
-          } else {
-            btn.classList.remove('bg-blue-50', 'border-blue-500', 'text-blue-700', 'font-bold');
-            btn.classList.add('bg-white', 'border-slate-200', 'text-slate-700');
-          }
         });
       }
 
@@ -862,14 +848,14 @@
       function handlePointerDown(clientX, clientY) {
         const pt = getCanvasPoint(clientX, clientY);
         const distCircle = Math.hypot(pt.x - layout.cx, pt.y - layout.cy);
-        // 左の円付近をクリック/タッチした場合
-        if (distCircle <= layout.R * 1.45) {
+        // 左の円付近をクリック/タッチした場合（等速円運動が表示ONのときのみ反応）
+        if (showCircle && distCircle <= layout.R * 1.45) {
           isDragging = true;
           dragTarget = 'circle';
           setPlaying(false);
           updateAngleFromPointer(pt);
-        } else if (pt.x >= layout.axisY2 - 20 && pt.x <= layout.axisY2 + layout.w360 + 20) {
-          // 右の正弦波グラフ付近をクリック/タッチした場合
+        } else if (showSine && pt.x >= layout.axisY2 - 20 && pt.x <= layout.axisY2 + layout.w360 + 20) {
+          // 右の正弦波グラフ付近をクリック/タッチした場合（正弦曲線が表示ONのときのみ反応）
           isDragging = true;
           dragTarget = 'graph';
           setPlaying(false);
@@ -957,6 +943,41 @@
 
       colorHighlightChk.addEventListener('change', draw);
       traceModeChk.addEventListener('change', draw);
+
+      /**
+       * 表示切替トグルボタンの見た目（ON/OFF）を更新するヘルパー
+       */
+      function updateToggleBtnStyle(btn, isActive) {
+        btn.setAttribute('aria-pressed', String(isActive));
+        const iconSpan = btn.querySelector('.toggle-icon');
+        if (isActive) {
+          if (iconSpan) iconSpan.textContent = '✓';
+          btn.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-700', 'font-semibold');
+          btn.classList.remove('border-slate-300', 'bg-slate-100', 'text-slate-400', 'line-through');
+        } else {
+          if (iconSpan) iconSpan.textContent = '−';
+          btn.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-700', 'font-semibold');
+          btn.classList.add('border-slate-300', 'bg-slate-100', 'text-slate-400', 'line-through');
+        }
+      }
+
+      toggleCircleBtn.addEventListener('click', () => {
+        showCircle = !showCircle;
+        updateToggleBtnStyle(toggleCircleBtn, showCircle);
+        draw();
+      });
+
+      toggleSHMBtn.addEventListener('click', () => {
+        showSHM = !showSHM;
+        updateToggleBtnStyle(toggleSHMBtn, showSHM);
+        draw();
+      });
+
+      toggleSineBtn.addEventListener('click', () => {
+        showSine = !showSine;
+        updateToggleBtnStyle(toggleSineBtn, showSine);
+        draw();
+      });
 
       // 全画面表示（ブラウザ標準API ＋ iframeプレビュー用フォールバック）
       fullscreenBtn.addEventListener('click', () => {

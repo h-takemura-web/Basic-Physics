@@ -84,21 +84,21 @@
           </div>
         </div>
 
-        <!-- 角度 θ スライダー -->
-        <div class="flex items-center gap-2.5 flex-1 min-w-[210px] px-1">
+        <!-- 角度 θ スライダー（短めの固定幅にし、数値変化の影響を受けないようにする） -->
+        <div class="flex items-center gap-2 flex-none px-1">
           <label for="angleSlider" class="text-sm font-semibold text-slate-700 whitespace-nowrap">
             角度 <span class="math-font italic text-base">θ</span> :
           </label>
-          <input id="angleSlider" type="range" min="0" max="360" step="1" value="45" class="w-full accent-blue-600 bg-slate-200">
+          <input id="angleSlider" type="range" min="0" max="360" step="1" value="45" class="w-[140px] flex-none accent-blue-600 bg-slate-200">
         </div>
 
-        <!-- 現在の角度 θ と変位 y のリアルタイム数値表示 -->
-        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-1.5 math-font flex items-center gap-4 text-base sm:text-lg whitespace-nowrap">
-          <div>
-            <span class="italic">θ</span> = <span id="thetaDisp" class="font-bold text-slate-900">45°</span>
+        <!-- 現在の角度 θ と変位 y のリアルタイム数値表示（固定幅でレイアウト揺れを防止） -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-1.5 math-font flex items-center gap-3 text-base sm:text-lg whitespace-nowrap w-[285px] sm:w-[300px] shrink-0 overflow-hidden" style="font-variant-numeric: tabular-nums;">
+          <div class="shrink-0">
+            <span class="italic">θ</span> = <span id="thetaDisp" class="inline-block w-[42px] text-right font-bold text-slate-900">45°</span>
           </div>
-          <div class="h-4 w-px bg-slate-300"></div>
-          <div>
+          <div class="h-4 w-px bg-slate-300 shrink-0"></div>
+          <div class="shrink-0">
             <span class="italic">y</span> = <span id="yDisp" class="font-bold text-slate-900">0.71 r  (√2/2 r)</span>
           </div>
         </div>
